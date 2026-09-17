@@ -22,7 +22,7 @@ The default rules target intent, not syntax:
 
 Anything ruff, a type checker or a security scanner already catches is deliberately out of scope.
 
-Test files also get rules drawn from Kent Beck's [Test Desiderata](https://testdesiderata.com). Each asks whether a test violates one property. Inspiring is left out because it describes a whole suite, not a single test.
+Test files also get rules drawn from Kent Beck's [Test Desiderata](https://testdesiderata.com). Each asks whether a test violates one property.
 
 | Rule | Desideratum | Severity |
 | --- | --- | --- |
@@ -37,6 +37,7 @@ Test files also get rules drawn from Kent Beck's [Test Desiderata](https://testd
 | `test_not_automated` | Automated | error |
 | `test_not_specific` | Specific | warning |
 | `test_not_predictive` | Predictive | warning |
+| `test_not_inspiring` | Inspiring | warning |
 
 They only run on files matching the default test patterns, such as `test_*.py`, `*_test.go`, `*.spec.ts`, `*Test.java` and `*/tests/*.rs`. Rust unit tests inside `mod tests` in a source file are not matched.
 

@@ -114,7 +114,7 @@ async def test_render_is_one_based(config) -> None:
 
 def test_desiderata_rules_only_apply_to_test_files(config) -> None:
     desiderata = {name for name in config.rules if name.startswith("test_")}
-    assert len(desiderata) == 11
+    assert len(desiderata) == 12
     for path in [
         "tests/test_orders.py",
         "orders_test.go",

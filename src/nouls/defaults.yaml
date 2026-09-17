@@ -168,3 +168,8 @@ rules:
     message: Test passing does not predict production behaviour
     severity: warning
     files: *test_files
+  test_not_inspiring:
+    question: Is this a test that would give a reader little confidence the code works even when it passes, because it checks something trivial or incidental, exercises the framework or language rather than the code under test, covers only the easy path of risky behaviour, or claims in its name more than it actually verifies?
+    message: Passing this test would not inspire confidence
+    severity: warning
+    files: *test_files
