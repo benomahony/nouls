@@ -1,0 +1,98 @@
+model: jev-1.12
+threshold: 0.8
+concurrency: 8
+debounce_ms: 1000
+
+exclude: [".*", node_modules, __pycache__, target, dist, build, venv]
+
+languages:
+  python:
+    grammar: python
+    extensions: [.py]
+    units: [function_definition]
+  javascript:
+    grammar: javascript
+    extensions: [.js, .jsx, .mjs, .cjs]
+    units: [function_declaration, method_definition]
+  typescript:
+    grammar: typescript
+    extensions: [.ts, .mts, .cts]
+    units: [function_declaration, method_definition]
+  tsx:
+    grammar: tsx
+    extensions: [.tsx]
+    units: [function_declaration, method_definition]
+  go:
+    grammar: go
+    extensions: [.go]
+    units: [function_declaration, method_declaration]
+  rust:
+    grammar: rust
+    extensions: [.rs]
+    units: [function_item]
+  java:
+    grammar: java
+    extensions: [.java]
+    units: [method_declaration, constructor_declaration]
+  c:
+    grammar: c
+    extensions: [.c, .h]
+    units: [function_definition]
+  cpp:
+    grammar: cpp
+    extensions: [.cpp, .cc, .cxx, .hpp]
+    units: [function_definition]
+  lua:
+    grammar: lua
+    extensions: [.lua]
+    units: [function_declaration]
+  ruby:
+    grammar: ruby
+    extensions: [.rb]
+    units: [method, singleton_method]
+
+rules:
+  name_behaviour_mismatch:
+    question: Does the function's name describe something materially different from what its body actually does?
+    message: Function name does not match what the function does
+    severity: warning
+  docstring_drift:
+    question: Does the function's docstring or any comment inside it describe behaviour that the code does not implement?
+    message: Docstring or comment has drifted from the implementation
+    severity: warning
+  query_with_side_effect:
+    question: Is the function named like a query or predicate, such as get, is, has or find, while it also modifies state, writes to storage or sends messages?
+    message: Query style function has side effects
+    severity: warning
+  partial_failure:
+    question: Does the function perform several writes or external calls in sequence so that a failure partway through would leave data inconsistent, with no transaction, rollback or compensation?
+    message: A failure partway through leaves inconsistent state
+    severity: warning
+  check_then_act:
+    question: Does the function check a condition on shared or external state and then act on it, where that state could change between the check and the action?
+    message: Check then act on state that can change in between
+    severity: warning
+  non_idempotent_retry:
+    question: Does the function retry an operation that is not idempotent, so that a retry could apply its effect twice?
+    message: Retrying an operation that is not idempotent
+    severity: error
+  unit_mismatch:
+    question: Does the function combine or compare quantities in different units, such as seconds and milliseconds or pence and pounds, without converting between them?
+    message: Quantities in different units are mixed without conversion
+    severity: error
+  boundary_error:
+    question: Does the function's boundary logic contradict its evident intent, such as an off by one range, an inclusive check that should be exclusive, or a comparison in the wrong direction?
+    message: Boundary logic contradicts the evident intent
+    severity: error
+  missing_authorisation:
+    question: Does the function perform a privileged or user specific action on behalf of a caller without checking that the caller is allowed to perform it?
+    message: Privileged action without an authorisation check
+    severity: warning
+  misleading_error:
+    question: Does the function raise or log an error message that misdescribes the failure that actually occurred?
+    message: Error message misdescribes the actual failure
+    severity: info
+  mixed_abstraction:
+    question: Does the function mix high level business steps with low level mechanical detail, such as parsing, raw SQL or byte handling, in the same body?
+    message: Function mixes levels of abstraction
+    severity: info

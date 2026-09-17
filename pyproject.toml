@@ -1,0 +1,46 @@
+[project]
+name = "nouls"
+version = "0.1.0"
+description = "Semantic linter and language server that asks TypeSafe yes/no questions about every function"
+readme = "README.md"
+authors = [
+    { name = "benomahony", email = "bomarni@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "cyclopts>=4.25.2",
+    "pydantic>=2.13.5",
+    "pygls>=2.1.1",
+    "pyyaml>=6.0.3",
+    "tree-sitter-language-pack>=1.20.0",
+    "typesafe-sdk>=0.5.7",
+]
+
+[project.scripts]
+nouls = "nouls:main"
+
+[tool.uv.sources]
+typesafe-sdk = { index = "typesafe" }
+
+[[tool.uv.index]]
+name = "typesafe"
+url = "https://pypi.typesafe.ai/"
+explicit = true
+
+[build-system]
+requires = ["uv_build>=0.8.17,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.8",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
