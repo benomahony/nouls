@@ -1,0 +1,94 @@
+default_language_version:
+  python: python3
+default_stages: [pre-commit]
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+        args: [--unsafe]
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-ast
+      - id: check-docstring-first
+      - id: debug-statements
+      - id: name-tests-test
+        args: [--pytest-test-first]
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.47.0
+    hooks:
+      - id: markdownlint
+        args: [--fix, --disable, MD013, MD024, MD033, MD036, MD040, MD041, MD060, --]
+
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v4.12.1
+    hooks:
+      - id: commitizen
+        stages: [commit-msg]
+
+  - repo: https://github.com/benomahony/nasa-lsp
+    rev: v0.1.7
+    hooks:
+      - id: nasa-lsp
+        exclude: ^tests/
+
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff-format
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: ruff
+        name: ruff
+        entry: uv run ruff check --fix --exit-non-zero-on-fix
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: basedpyright
+        name: basedpyright
+        entry: uv run basedpyright
+        language: system
+        types: [python]
+        pass_filenames: true
+        require_serial: true
+      - id: vulture
+        name: vulture
+        entry: uv run vulture src/nouls/ --min-confidence 80
+        language: system
+        types: [python]
+        files: ^src/nouls/
+        pass_filenames: false
+        require_serial: true
+      - id: bandit
+        name: bandit
+        entry: uv run bandit -c pyproject.toml -r src/nouls/
+        language: system
+        files: ^src/nouls/
+        exclude: ^tests/
+        pass_filenames: false
+      - id: cliqa
+        name: cliqa
+        entry: uv run cliqa analyze nouls
+        language: system
+        files: ^(pyproject\.toml|src/.*\.py)$
+        pass_filenames: false
+        require_serial: true
+      - id: deptry
+        name: deptry
+        entry: uv run deptry . --extend-exclude "\.venv|tests"
+        language: system
+        pass_filenames: false
+        require_serial: true

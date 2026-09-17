@@ -43,48 +43,73 @@ class Config(BaseModel):
     rules: dict[str, Rule]
 
     def store_path(self) -> Path:
-        return self.store.expanduser() if self.store else default_path()
+        path = self.store.expanduser() if self.store else default_path()
+        assert path.name, "Store path must name a file"
+        assert not path.is_dir(), "Store path must not be a directory"
+        return path
 
     def language_for(self, path: Path) -> str | None:
+        assert path.name, "Path must name a file"
+        assert self.languages, "At least one language must be configured"
         return next(
             (name for name, lang in self.languages.items() if path.suffix in lang.extensions),
             None,
         )
 
     def rules_for(self, language: str, path: Path) -> dict[str, Rule]:
-        return {
+        assert language in self.languages, "Language must be configured"
+        selected = {
             name: rule
             for name, rule in self.rules.items()
             if rule.enabled
             and (rule.languages is None or language in rule.languages)
-            and (rule.files is None or any(fnmatch(path.name, p) or fnmatch(path.as_posix(), p) for p in rule.files))
+            and (
+                rule.files is None
+                or any(fnmatch(path.name, p) or fnmatch(path.as_posix(), p) for p in rule.files)
+            )
         }
+        assert all(rule.enabled for rule in selected.values()), "Only enabled rules may apply"
+        return selected
 
     def excluded(self, path: Path) -> bool:
+        assert not path.is_absolute(), "Exclusion applies to paths relative to the search root"
+        assert all(self.exclude), "Exclude patterns must not be empty"
         return any(fnmatch(part, pattern) for part in path.parts for pattern in self.exclude)
 
 
 def merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     merged = dict(base)
-    for key, value in override.items():
-        if isinstance(value, dict) and isinstance(merged.get(key), dict):
-            merged[key] = merge(merged[key], value)
-        else:
-            merged[key] = value
+    stack = [(merged, override)]
+    while stack:
+        target, source = stack.pop()
+        for key, value in source.items():
+            if isinstance(value, dict) and isinstance(target.get(key), dict):
+                target[key] = dict(target[key])
+                stack.append((target[key], value))
+            else:
+                target[key] = value
+    assert set(base) <= set(merged), "Every base key must survive the merge"
+    assert set(override) <= set(merged), "Every override key must reach the result"
     return merged
 
 
 def find_config(start: Path) -> Path | None:
+    assert start.is_absolute(), "Config search must start from an absolute path"
     for directory in [start, *start.parents]:
         for name in CONFIG_NAMES:
-            if (directory / name).is_file():
-                return directory / name
+            candidate = directory / name
+            if candidate.is_file():
+                assert candidate.parent == directory, "Config must sit in a searched directory"
+                return candidate
     return None
 
 
 def load_config(start: Path, explicit: Path | None = None) -> Config:
     data = yaml.safe_load(files("nouls").joinpath("defaults.yaml").read_text())
+    assert "rules" in data, "Defaults must define rules"
     path = explicit or find_config(start.resolve())
     if path is not None:
         data = merge(data, yaml.safe_load(path.read_text()) or {})
-    return Config.model_validate(data)
+    config = Config.model_validate(data)
+    assert config.languages, "Config must define at least one language"
+    return config

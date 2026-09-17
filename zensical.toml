@@ -1,0 +1,12 @@
+[project]
+site_name = "nouls"
+site_url = "https://benomahony.github.io/nouls"
+site_description = "Semantic linter and language server that asks TypeSafe yes/no questions about every function"
+site_author = "Ben O'Mahony"
+copyright = "&copy; 2026 Ben O'Mahony"
+docs_dir = "docs"
+site_dir = "site"
+use_directory_urls = true
+
+[project.theme]
+variant = "modern"

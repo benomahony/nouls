@@ -3,22 +3,48 @@ name = "nouls"
 version = "0.1.0"
 description = "Semantic linter and language server that asks TypeSafe yes/no questions about every function"
 readme = "README.md"
-authors = [
-    { name = "benomahony", email = "bomarni@gmail.com" }
-]
 requires-python = ">=3.12"
+authors = [
+    {name = "Ben O'Mahony", email = "bomarni@gmail.com"}
+]
+license = {text = "MIT"}
+
 dependencies = [
     "cyclopts>=4.25.2",
+    "lsprotocol>=2025.0.0",
     "pydantic>=2.13.5",
     "pygls>=2.1.1",
     "pyyaml>=6.0.3",
     "rich>=15.0.0",
+    "tree-sitter>=0.26.0",
     "tree-sitter-language-pack>=1.20.0",
     "typesafe-sdk>=0.5.7",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=6.0.0",
+    "pytest-examples>=0.0.10",
+    "pytest-xdist>=3.0.0",
+    "pytest-testmon>=2.0.0",
+    "ruff>=0.3.0",
+    "basedpyright>=1.10.0",
+    "prek>=0.1.0",
+    "vulture>=2.11",
+    "bandit>=1.7.0",
+    "deptry>=0.12.0",
+    "cliqa>=0.1.0",
+    "bump-my-version>=0.28.0",
+    "zensical>=0.0.10",
+]
+mcp = [
+    "mcp>=1.2.0,<2",
+]
+
 [project.scripts]
-nouls = "nouls:main"
+nouls = "nouls.cli:app"
 
 [tool.uv.sources]
 typesafe-sdk = { index = "typesafe" }
@@ -29,19 +55,88 @@ url = "https://pypi.typesafe.ai/"
 explicit = true
 
 [build-system]
-requires = ["uv_build>=0.8.17,<0.9.0"]
-build-backend = "uv_build"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[dependency-groups]
-dev = [
-    "pytest>=9.1.1",
-    "pytest-asyncio>=1.4.0",
-    "ruff>=0.16.8",
-]
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["tests"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/nouls"]
 
 [tool.ruff]
-line-length = 120
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = [
+    "--cov=nouls",
+    "--cov-branch",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-fail-under=90",
+    "--strict-markers",
+]
+markers = [
+    "unit: Fast unit tests (no subprocess, can run in parallel with -n auto)",
+    "integration: Slow integration tests (subprocess, run sequentially)",
+]
+
+[tool.coverage.run]
+branch = true
+omit = ["*/mcp_server.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101"]
+
+[tool.basedpyright]
+include = ["src/nouls"]
+typeCheckingMode = "standard"
+
+[tool.deptry]
+extend_exclude = ["tests"]
+
+[tool.deptry.per_rule_ignores]
+DEP001 = ["nouls"]
+DEP002 = ["pytest", "pytest-asyncio", "pytest-cov", "pytest-examples", "pytest-xdist", "pytest-testmon", "ruff", "basedpyright", "prek", "vulture", "bandit", "deptry", "cliqa", "bump-my-version", "zensical"]
+DEP003 = ["nouls", "mcp"]
+
+[tool.bumpversion]
+current_version = "0.1.0"
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
+serialize = ["{major}.{minor}.{patch}"]
+search = "{current_version}"
+replace = "{new_version}"
+regex = false
+ignore_missing_version = false
+tag = true
+sign_tags = false
+tag_name = "v{new_version}"
+tag_message = "Bump version: {current_version} → {new_version}"
+allow_dirty = false
+commit = true
+message = "Bump version: {current_version} → {new_version}"
+commit_args = ""
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = "version = \"{current_version}\""
+replace = "version = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "src/nouls/__init__.py"
+search = "__version__ = \"{current_version}\""
+replace = "__version__ = \"{new_version}\""

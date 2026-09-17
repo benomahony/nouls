@@ -1,0 +1,22 @@
+# nouls
+
+> Semantic linter and language server that asks TypeSafe yes/no questions about every function
+
+## Documentation
+
+- [Installation](docs/index.md#installation): Install nouls with uv
+- [Usage](docs/index.md#usage): Lint from the command line or run the language server
+- [Configuration](docs/index.md#configuration): Languages, rules, thresholds and the store
+- [Labels and thresholds](docs/index.md#labels-and-thresholds): Tune rules from your own verdicts
+- [Development](docs/index.md#development): Set up a development environment and run tests
+
+## Project Information
+
+- **Source Code**: https://github.com/benomahony/nouls
+- **PyPI Package**: https://pypi.org/project/nouls
+- **Documentation**: https://benomahony.github.io/nouls
+
+## AI Integration
+
+- **MCP Server**: Model Context Protocol server available at `src/nouls/mcp_server.py` for AI-powered documentation access
+- **Agent Skill**: Claude Code skill available in `.skills/nouls/SKILL.md` for enhanced project interaction

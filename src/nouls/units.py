@@ -24,23 +24,32 @@ class Unit:
     last_line: int
 
     def contains(self, line: int) -> bool:
+        assert line >= 0, "Lines are zero based"
+        assert self.first_line <= self.last_line, "Unit must not end before it starts"
         return self.first_line <= line <= self.last_line
 
 
 def headline(node: Node, source: str) -> Span:
+    assert source, "Unit source must not be empty"
     name = node.child_by_field_name("name")
     if name is not None:
-        return Span(name.start_point.row, name.start_point.column, name.end_point.row, name.end_point.column)
-    first_line = source.split("\n", 1)[0]
-    return Span(
-        node.start_point.row,
-        node.start_point.column,
-        node.start_point.row,
-        node.start_point.column + len(first_line),
-    )
+        span = Span(
+            name.start_point.row, name.start_point.column, name.end_point.row, name.end_point.column
+        )
+    else:
+        first_line = source.split("\n", 1)[0]
+        span = Span(
+            node.start_point.row,
+            node.start_point.column,
+            node.start_point.row,
+            node.start_point.column + len(first_line),
+        )
+    assert span.end_line >= span.line, "Span must not end before it starts"
+    return span
 
 
 def extract_units(text: str, language: Language) -> list[Unit]:
+    assert language.units, "Language must declare unit node types"
     root = get_parser(language.grammar).parse(text.encode()).root_node
     kinds = set(language.units)
     units: list[Unit] = []
@@ -50,9 +59,22 @@ def extract_units(text: str, language: Language) -> list[Unit]:
         if node.type in kinds and node.text:
             source = node.text.decode()
             name = node.child_by_field_name("name")
-            label = name.text.decode() if name is not None and name.text else source.split("\n", 1)[0].strip()
+            label = (
+                name.text.decode()
+                if name is not None and name.text
+                else source.split("\n", 1)[0].strip()
+            )
             units.append(
-                Unit(node.type, label, source, headline(node, source), node.start_point.row, node.end_point.row)
+                Unit(
+                    node.type,
+                    label,
+                    source,
+                    headline(node, source),
+                    node.start_point.row,
+                    node.end_point.row,
+                )
             )
         stack.extend(node.children)
-    return sorted(units, key=lambda unit: (unit.span.line, unit.span.column))
+    ordered = sorted(units, key=lambda unit: (unit.span.line, unit.span.column))
+    assert all(unit.source for unit in ordered), "Every unit must have source"
+    return ordered
