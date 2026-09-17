@@ -32,6 +32,7 @@ class Config(BaseModel):
     threshold: float
     concurrency: int
     debounce_ms: int
+    show_probability: bool
     exclude: list[str]
     languages: dict[str, Language]
     rules: dict[str, Rule]

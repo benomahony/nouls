@@ -37,7 +37,7 @@ nouls rules
 nouls serve
 ```
 
-`check` prints `path:line:column: severity [rule] message (probability)` and exits 1 when an error level rule fires.
+`check` prints `path:line:column: severity [rule] message (probability)` and exits 1 when an error level rule fires. Set `show_probability: false` to drop the probability from both the command line and editor diagnostics.
 
 ## Configuration
 
@@ -48,6 +48,7 @@ model: jev-1.12
 threshold: 0.8
 concurrency: 8
 debounce_ms: 1000
+show_probability: true
 exclude: [".*", node_modules, __pycache__, target, dist, build, venv]
 
 languages:

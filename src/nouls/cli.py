@@ -25,10 +25,10 @@ def discover(paths: list[Path], config: Config) -> Iterator[tuple[Path, str]]:
                 yield candidate, language
 
 
-def render(path: Path, finding: Finding) -> str:
+def render(path: Path, finding: Finding, show_probability: bool) -> str:
     return (
         f"{path}:{finding.span.line + 1}:{finding.span.column + 1}: "
-        f"{finding.severity} [{finding.rule}] {finding.message} ({finding.probability:.0%})"
+        f"{finding.severity} [{finding.rule}] {finding.describe(show_probability)}"
     )
 
 
@@ -39,7 +39,7 @@ async def run_check(paths: list[Path], config: Config) -> int:
         results = await asyncio.gather(*(analyser.analyse(path.read_text(), language) for path, language in files))
     findings = [(path, finding) for (path, _), found in zip(files, results) for finding in found]
     for path, finding in findings:
-        print(render(path, finding))
+        print(render(path, finding, config.show_probability))
     return 1 if any(finding.severity == "error" for _, finding in findings) else 0
 
 

@@ -16,6 +16,9 @@ class Finding:
     probability: float
     span: Span
 
+    def describe(self, show_probability: bool) -> str:
+        return f"{self.message} ({self.probability:.0%})" if show_probability else self.message
+
 
 class Analyser:
     def __init__(self, config: Config, client: AsyncTypeSafeClient, cache_size: int = 2048):

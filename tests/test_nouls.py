@@ -105,4 +105,6 @@ def test_discover_skips_excluded_and_unknown_files(config, tmp_path: Path) -> No
 
 async def test_render_is_one_based(config) -> None:
     findings = await Analyser(config, FakeClient()).analyse(PYTHON, "python")
-    assert render(Path("a.py"), findings[0]).startswith("a.py:5:9: error [unit_mismatch]")
+    assert render(Path("a.py"), findings[0], True).startswith("a.py:5:9: error [unit_mismatch]")
+    assert render(Path("a.py"), findings[0], True).endswith("(95%)")
+    assert render(Path("a.py"), findings[0], False).endswith("without conversion")

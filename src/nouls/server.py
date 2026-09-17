@@ -37,13 +37,13 @@ class NoulsServer(LanguageServer):
 server = NoulsServer()
 
 
-def to_diagnostic(finding: Finding) -> types.Diagnostic:
+def to_diagnostic(finding: Finding, show_probability: bool) -> types.Diagnostic:
     return types.Diagnostic(
         range=types.Range(
             start=types.Position(line=finding.span.line, character=finding.span.column),
             end=types.Position(line=finding.span.end_line, character=finding.span.end_column),
         ),
-        message=f"{finding.message} ({finding.probability:.0%})",
+        message=finding.describe(show_probability),
         severity=SEVERITIES[finding.severity],
         code=finding.rule,
         source="nouls",
@@ -66,7 +66,7 @@ async def lint(ls: NoulsServer, uri: str) -> None:
         types.PublishDiagnosticsParams(
             uri=uri,
             version=document.version,
-            diagnostics=[to_diagnostic(finding) for finding in findings],
+            diagnostics=[to_diagnostic(finding, analyser.config.show_probability) for finding in findings],
         )
     )
 

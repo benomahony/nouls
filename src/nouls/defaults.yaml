@@ -2,6 +2,7 @@ model: jev-1.12
 threshold: 0.8
 concurrency: 8
 debounce_ms: 1000
+show_probability: true
 
 exclude: [".*", node_modules, __pycache__, target, dist, build, venv]
 
