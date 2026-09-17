@@ -6,7 +6,7 @@ from typesafe_sdk import AsyncTypeSafeClient, Noul
 
 from nouls.config import Config, Rule, Severity
 from nouls.store import Observation, Store, digest
-from nouls.units import Span, extract_units
+from nouls.units import Span, Unit, extract_units
 
 
 @dataclass(frozen=True)
@@ -20,7 +20,11 @@ class Finding:
 
     def describe(self, show_probability: bool) -> str:
         assert self.message, "Finding must have a message"
-        text = f"{self.message} ({self.probability:.0%})" if show_probability else self.message
+        text = (
+            f"{self.message} (Probability: {self.probability:.0%})"
+            if show_probability
+            else self.message
+        )
         assert text.startswith(self.message), "Description must lead with the message"
         return text
 
@@ -31,6 +35,15 @@ class Asked:
     asked: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
+
+
+@dataclass(frozen=True)
+class Parsed:
+    path: Path
+    language: str
+    rules: dict[str, Rule]
+    units: list[Unit]
+    hashes: list[str]
 
 
 def unit_hash(language: str, source: str) -> str:
@@ -84,26 +97,36 @@ class Analyser:
         self.store.save_answers(model, uhash, {hashes[name]: p for name, p in fresh.items()})
         result.probabilities |= fresh
         result.asked = len(missing)
-        result.input_tokens = response.usage.input_tokens
-        result.output_tokens = response.usage.output_tokens
+        result.input_tokens = response.usage.input_tokens or 0
+        result.output_tokens = response.usage.output_tokens or 0
         assert set(result.probabilities) == set(rules), "Every rule must have an answer"
         return result
 
-    async def analyse(self, text: str, language: str, path: Path) -> list[Finding]:
+    def parse(self, text: str, language: str, path: Path) -> Parsed | None:
+        # Tree-sitter's parse tree must be fully built and discarded before any
+        # concurrent network I/O runs in the same process: see units.py's
+        # _disable_cyclic_gc for why the two can't safely overlap in time.
         assert language in self.config.languages, "Language must be configured"
         rules = self.config.rules_for(language, path)
         if not rules:
-            return []
+            return None
         units = extract_units(text, self.config.languages[language])
         hashes = [unit_hash(language, unit.source) for unit in units]
+        assert len(hashes) == len(units), "Every unit must have a hash"
         self.store.save_units(language, list(zip(hashes, (unit.source for unit in units))))
-        results = await asyncio.gather(*(self.ask(language, unit.source, rules) for unit in units))
-        labels = self.store.labels(hashes)
+        return Parsed(path, language, rules, units, hashes)
+
+    async def score(self, parsed: Parsed) -> list[Finding]:
+        results = await asyncio.gather(
+            *(self.ask(parsed.language, unit.source, parsed.rules) for unit in parsed.units)
+        )
+        assert len(results) == len(parsed.units), "Every unit must have an ask result"
+        labels = self.store.labels(parsed.hashes)
         observations: list[Observation] = []
         findings: list[Finding] = []
-        for unit, uhash, result in zip(units, hashes, results):
+        for unit, uhash, result in zip(parsed.units, parsed.hashes, results):
             for name, probability in result.probabilities.items():
-                rule = rules[name]
+                rule = parsed.rules[name]
                 threshold = self.threshold(rule)
                 fired = probability >= threshold and labels.get((name, uhash)) is not False
                 observations.append(
@@ -122,8 +145,10 @@ class Analyser:
                     findings.append(
                         Finding(name, rule.message, rule.severity, probability, unit.span, uhash)
                     )
-        self.record(path, language, observations, results)
-        assert len(observations) == len(units) * len(rules), "Every rule must be observed per unit"
+        self.record(parsed.path, parsed.language, observations, results)
+        assert len(observations) == len(parsed.units) * len(parsed.rules), (
+            "Every rule must be observed per unit"
+        )
         return findings
 
     def record(
@@ -134,9 +159,11 @@ class Analyser:
         asked = sum(r.asked for r in results)
         total = len(observations)
         assert asked <= total, "Cannot ask more questions than were observed"
-        self.store.replace_observations(key, language, self.config.model, observations)
-        self.store.record_run(
+        self.store.record_results(
             key,
+            language,
+            self.config.model,
+            observations,
             len(results),
             asked,
             total - asked,

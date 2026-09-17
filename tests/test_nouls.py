@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from nouls.analyser import Analyser, unit_hash
+from nouls.analyser import Analyser, Finding, unit_hash
 from nouls.cli import app, discover, render
 from nouls.config import load_config
 from nouls.stats import SAMPLE, score
@@ -13,9 +13,14 @@ from tests.conftest import APP, PYTHON, FakeClient, as_client
 pytestmark = pytest.mark.unit
 
 
+async def analyse(analyser: Analyser, text: str, language: str, path: Path) -> list[Finding]:
+    parsed = analyser.parse(text, language, path)
+    return [] if parsed is None else await analyser.score(parsed)
+
+
 async def test_flags_only_the_offending_function(config, store) -> None:
     client = FakeClient()
-    findings = await Analyser(config, as_client(client), store).analyse(PYTHON, "python", APP)
+    findings = await analyse(Analyser(config, as_client(client), store), PYTHON, "python", APP)
     assert [(f.rule, f.severity, f.span.line, f.span.column) for f in findings] == [
         ("unit_mismatch", "error", 4, 8)
     ]
@@ -24,10 +29,13 @@ async def test_flags_only_the_offending_function(config, store) -> None:
 
 async def test_unchanged_functions_are_cached_across_processes(config, store) -> None:
     client = FakeClient()
-    await Analyser(config, as_client(client), store).analyse(PYTHON, "python", APP)
+    await analyse(Analyser(config, as_client(client), store), PYTHON, "python", APP)
     reopened = Store(store.path)
-    await Analyser(config, as_client(client), reopened).analyse(
-        PYTHON.replace("sum(items)", "sum(items) + 0"), "python", APP
+    await analyse(
+        Analyser(config, as_client(client), reopened),
+        PYTHON.replace("sum(items)", "sum(items) + 0"),
+        "python",
+        APP,
     )
     assert len(client.calls) == 3
     ((asked, cached),) = reopened.query("SELECT SUM(asked), SUM(cached) FROM runs")
@@ -36,9 +44,10 @@ async def test_unchanged_functions_are_cached_across_processes(config, store) ->
 
 async def test_rewording_one_rule_only_reasks_that_rule(config, store) -> None:
     client = FakeClient()
-    await Analyser(config, as_client(client), store).analyse(PYTHON, "python", APP)
+    analyser = Analyser(config, as_client(client), store)
+    await analyse(analyser, PYTHON, "python", APP)
     config.rules["unit_mismatch"].question = "Are seconds mixed with milliseconds?"
-    await Analyser(config, as_client(client), store).analyse(PYTHON, "python", APP)
+    await analyse(analyser, PYTHON, "python", APP)
     assert [call["questions"] for call in client.calls[2:]] == [
         {"unit_mismatch"},
         {"unit_mismatch"},
@@ -47,9 +56,9 @@ async def test_rewording_one_rule_only_reasks_that_rule(config, store) -> None:
 
 async def test_findings_labelled_false_are_suppressed(config, store) -> None:
     analyser = Analyser(config, as_client(FakeClient()), store)
-    findings = await analyser.analyse(PYTHON, "python", APP)
+    findings = await analyse(analyser, PYTHON, "python", APP)
     store.label("unit_mismatch", findings[0].unit_hash, False)
-    assert await analyser.analyse(PYTHON, "python", APP) == []
+    assert await analyse(analyser, PYTHON, "python", APP) == []
     ((fired,),) = store.query("SELECT SUM(fired) FROM observations")
     assert fired == 0
 
@@ -65,9 +74,12 @@ async def test_project_yaml_disables_and_scopes_rules(tmp_path: Path) -> None:
     assert "docstring_drift" not in python_rules
     assert "go_only" not in python_rules
     assert "go_only" in config.rules_for("go", Path("main.go"))
-    findings = await Analyser(
-        config, as_client(FakeClient()), Store(tmp_path / "nouls.db")
-    ).analyse(PYTHON, "python", APP)
+    findings = await analyse(
+        Analyser(config, as_client(FakeClient()), Store(tmp_path / "nouls.db")),
+        PYTHON,
+        "python",
+        APP,
+    )
     assert [f.rule for f in findings] == ["unit_mismatch"]
 
 
@@ -101,9 +113,11 @@ def test_discover_skips_excluded_and_unknown_files(config, tmp_path: Path) -> No
 
 
 async def test_render_is_one_based(config, store) -> None:
-    findings = await Analyser(config, as_client(FakeClient()), store).analyse(PYTHON, "python", APP)
+    findings = await analyse(
+        Analyser(config, as_client(FakeClient()), store), PYTHON, "python", APP
+    )
     assert render(Path("a.py"), findings[0], True).startswith("a.py:5:9: error [unit_mismatch]")
-    assert render(Path("a.py"), findings[0], True).endswith("(95%)")
+    assert render(Path("a.py"), findings[0], True).endswith("(Probability: 95%)")
     assert render(Path("a.py"), findings[0], False).endswith("without conversion")
 
 
@@ -134,7 +148,9 @@ def test_score_counts_precision_and_recall() -> None:
 
 
 async def test_review_sample_skips_labelled_and_spreads_bands(config, store) -> None:
-    findings = await Analyser(config, as_client(FakeClient()), store).analyse(PYTHON, "python", APP)
+    findings = await analyse(
+        Analyser(config, as_client(FakeClient()), store), PYTHON, "python", APP
+    )
     rows = store.query(SAMPLE, ("unit_mismatch", 10))
     assert sorted(round(row[6], 2) for row in rows) == [0.05, 0.95]
     store.label("unit_mismatch", findings[0].unit_hash, True)

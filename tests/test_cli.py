@@ -1,12 +1,20 @@
+import ast
+import inspect
+import io
+import re
 from pathlib import Path
 
 import pytest
+from rich.console import Console
 
+from nouls import cli
 from nouls.cli import app
 from nouls.store import Store
 from tests.conftest import PYTHON, FakeClient
 
 pytestmark = pytest.mark.unit
+
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
 def run(*tokens: str) -> int:
@@ -46,6 +54,34 @@ def test_check_hides_probability_when_configured(
     assert client.calls
 
 
+def test_check_prints_a_pretty_grouped_summary_on_a_terminal(
+    tmp_path: Path, client: FakeClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    buffer = io.StringIO()
+    monkeypatch.setattr(
+        cli, "console", Console(file=buffer, force_terminal=True, no_color=True, width=200)
+    )
+    (tmp_path / "app.py").write_text(PYTHON)
+    assert run("check", str(tmp_path)) == 1
+    out = ANSI.sub("", buffer.getvalue())
+    assert "app.py" in out
+    assert "unit_mismatch" in out
+    assert "1 error" in out
+    assert "across 1 file" in out
+
+
+def test_check_prints_no_issues_found_on_a_clean_terminal_run(
+    tmp_path: Path, client: FakeClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    buffer = io.StringIO()
+    monkeypatch.setattr(
+        cli, "console", Console(file=buffer, force_terminal=True, no_color=True, width=200)
+    )
+    (tmp_path / "clean.py").write_text("def total(items):\n    return sum(items)\n")
+    assert run("check", str(tmp_path / "clean.py")) == 0
+    assert "No issues found" in buffer.getvalue()
+
+
 def test_check_rejects_missing_paths(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert run("check", str(tmp_path / "nope")) == 2
     assert "no such file or directory" in capsys.readouterr().err
@@ -63,6 +99,35 @@ def test_rules_lists_scope_and_threshold(
     assert "unit_mismatch (error, threshold 0.95, python)" in out
     assert "test_slow (warning, threshold 0.8, all languages in 16 file patterns)" in out
     assert "mixed_abstraction" not in out
+
+
+def test_rules_prints_a_table_on_a_terminal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    buffer = io.StringIO()
+    monkeypatch.setattr(
+        cli, "console", Console(file=buffer, force_terminal=True, no_color=True, width=200)
+    )
+    (tmp_path / "nouls.yaml").write_text(
+        "rules:\n  unit_mismatch:\n    threshold: 0.95\n    languages: [python]\n"
+        "  mixed_abstraction:\n    enabled: false\n"
+    )
+    run("rules")
+    out = ANSI.sub("", buffer.getvalue())
+    assert "unit_mismatch" in out
+    assert "95%" in out
+    assert "python" in out
+    assert "mixed_abstraction" not in out
+
+
+def test_rules_uses_console_not_bare_print() -> None:
+    tree = ast.parse(inspect.getsource(cli.rules))
+    calls = [
+        node.func.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    ]
+    assert "print" not in calls, "rules() must render through the Rich console, not bare print()"
 
 
 def test_label_rejects_unknown_rules_and_lines(
@@ -108,6 +173,33 @@ def test_review_skips_and_quits(
     assert run("review", "unit_mismatch", "--limit", "5") == 0
     assert stored(tmp_path).query("SELECT * FROM labels") == []
     assert client.calls
+
+
+def test_review_skips_rows_with_corrupt_probability(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    store = stored(tmp_path)
+    store.db.execute("INSERT INTO units VALUES (?, ?, ?)", ("a" * 32, "python", "def f(): pass"))
+    store.db.execute(
+        "INSERT INTO observations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            "app.py",
+            "unit_mismatch",
+            "a" * 32,
+            "f",
+            0,
+            "python",
+            "jev-latest",
+            "b" * 32,
+            1.5,
+            0.8,
+            1,
+            "2024-01-01T00:00:00+00:00",
+        ),
+    )
+    assert run("review", "unit_mismatch") == 0
+    assert "corrupt stored probability" in capsys.readouterr().err
+    assert not store.query("SELECT * FROM labels")
 
 
 def test_review_rejects_unknown_rules(capsys: pytest.CaptureFixture[str]) -> None:

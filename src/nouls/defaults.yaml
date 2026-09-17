@@ -1,4 +1,4 @@
-model: jev-1.12
+model: jev-latest
 threshold: 0.8
 concurrency: 8
 debounce_ms: 1000

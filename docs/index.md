@@ -93,7 +93,7 @@ SELECT rule, quantile_cont(probability, [0.1, 0.5, 0.9]) FROM nouls.observations
 nouls merges its built in defaults with the first `nouls.yaml`, `nouls.yml`, `.nouls.yaml` or `.nouls.yml` found walking up from the target, or the file passed with `--config`. Maps merge key by key, so you only write what changes.
 
 ```yaml
-model: jev-1.12
+model: jev-latest
 threshold: 0.8
 concurrency: 8
 debounce_ms: 1000

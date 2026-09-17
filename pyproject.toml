@@ -18,7 +18,7 @@ dependencies = [
     "rich>=15.0.0",
     "tree-sitter>=0.26.0",
     "tree-sitter-language-pack>=1.20.0",
-    "typesafe-sdk>=0.5.7",
+    "typesafe-sdk>=0.6.0",
 ]
 
 [project.optional-dependencies]
@@ -45,14 +45,6 @@ mcp = [
 
 [project.scripts]
 nouls = "nouls.cli:app"
-
-[tool.uv.sources]
-typesafe-sdk = { index = "typesafe" }
-
-[[tool.uv.index]]
-name = "typesafe"
-url = "https://pypi.typesafe.ai/"
-explicit = true
 
 [build-system]
 requires = ["hatchling"]
@@ -140,3 +132,8 @@ replace = "version = \"{new_version}\""
 filename = "src/nouls/__init__.py"
 search = "__version__ = \"{current_version}\""
 replace = "__version__ = \"{new_version}\""
+
+[dependency-groups]
+dev = [
+    "nasa-lsp>=0.1.14",
+]

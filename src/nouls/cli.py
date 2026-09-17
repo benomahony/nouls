@@ -1,5 +1,6 @@
 import asyncio
 import sys
+from collections import Counter
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Annotated, Literal
@@ -8,13 +9,21 @@ from cyclopts import App, Parameter, validators
 from rich.console import Console
 from rich.prompt import Prompt
 from rich.syntax import Syntax
+from rich.table import Table
 from typesafe_sdk import AsyncTypeSafeClient
 
 from nouls.analyser import Analyser, Finding, unit_hash
-from nouls.config import Config, load_config
+from nouls.config import Config, Rule, Severity, load_config
 from nouls.stats import SAMPLE, display, stats
 from nouls.store import Store
 from nouls.units import extract_units
+
+SEVERITY_STYLE: dict[Severity, str] = {
+    "error": "bold red",
+    "warning": "yellow",
+    "info": "cyan",
+    "hint": "dim",
+}
 
 app = App(
     name="nouls",
@@ -65,18 +74,60 @@ def render(path: Path, finding: Finding, show_probability: bool) -> str:
     return text
 
 
+def render_pretty(findings: list[tuple[Path, Finding]], show_probability: bool) -> None:
+    by_path: dict[Path, list[Finding]] = {}
+    for path, finding in findings:
+        by_path.setdefault(path, []).append(finding)
+    assert sum(len(found) for found in by_path.values()) == len(findings), (
+        "Grouping by path must not drop or duplicate findings"
+    )
+    for path, found in by_path.items():
+        console.print(f"\n[bold underline]{display(str(path))}[/bold underline]")
+        for finding in sorted(found, key=lambda f: (f.span.line, f.span.column)):
+            style = SEVERITY_STYLE[finding.severity]
+            location = f"{finding.span.line + 1}:{finding.span.column + 1}"
+            console.print(
+                f"  [dim]{location:<8}[/dim][{style}]{finding.severity:<8}[/{style}]"
+                f"[bold]{finding.rule}[/bold]  {finding.describe(show_probability)}",
+                soft_wrap=True,
+            )
+    console.print()
+    if not findings:
+        console.print("[bold green]No issues found[/bold green]")
+        return
+    counts: Counter[Severity] = Counter(finding.severity for _, finding in findings)
+    assert counts.total() == len(findings), "Every finding must be counted exactly once"
+    summary = "  ".join(
+        f"[{SEVERITY_STYLE[sev]}]{count} {sev}{'s' if count != 1 else ''}[/{SEVERITY_STYLE[sev]}]"
+        for sev, count in counts.items()
+    )
+    files = "file" if len(by_path) == 1 else "files"
+    console.print(f"{summary}  across {len(by_path)} {files}")
+
+
 async def run_check(paths: list[Path], config: Config) -> int:
     assert paths, "At least one path must be given"
     async with AsyncTypeSafeClient() as client:
         analyser = Analyser(config, client, Store(config.store_path()))
         files = list(discover(paths, config))
-        results = await asyncio.gather(
-            *(analyser.analyse(path.read_text(), language, path) for path, language in files)
-        )
-    assert len(results) == len(files), "Every file must have results"
-    findings = [(path, finding) for (path, _), found in zip(files, results) for finding in found]
-    for path, finding in findings:
-        print(render(path, finding, config.show_probability))
+        # Every file is parsed here, up front, before any network call starts:
+        # tree-sitter's parse trees must all be built and discarded before
+        # concurrent async I/O begins, not interleaved with it.
+        parsed = [
+            unit
+            for unit in (
+                analyser.parse(path.read_text(), language, path) for path, language in files
+            )
+            if unit is not None
+        ]
+        results = await asyncio.gather(*(analyser.score(p) for p in parsed))
+    assert len(results) == len(parsed), "Every parsed file must have results"
+    findings = [(p.path, finding) for p, found in zip(parsed, results) for finding in found]
+    if console.is_terminal:
+        render_pretty(findings, config.show_probability)
+    else:
+        for path, finding in findings:
+            print(render(path, finding, config.show_probability))
     return 1 if any(finding.severity == "error" for _, finding in findings) else 0
 
 
@@ -94,19 +145,46 @@ def check(*paths: Path, config: ConfigOption = None) -> int:
     return asyncio.run(run_check(targets, load_config(root, config)))
 
 
+def rule_fields(loaded: Config, rule: Rule) -> tuple[Severity, float, str]:
+    assert rule.enabled, "Only enabled rules are describable"
+    scope = ", ".join(rule.languages) if rule.languages else "all languages"
+    if rule.files:
+        scope += f" in {len(rule.files)} file patterns"
+    threshold = loaded.threshold if rule.threshold is None else rule.threshold
+    assert 0.0 <= threshold <= 1.0, "Threshold must be in [0, 1]"
+    return rule.severity, threshold, scope
+
+
+def describe_rule(loaded: Config, name: str, rule: Rule) -> str:
+    assert name in loaded.rules, "Rule must be configured"
+    assert rule.question.strip(), "Rule question must not be blank"
+    severity, threshold, scope = rule_fields(loaded, rule)
+    return f"{name} ({severity}, threshold {threshold}, {scope}): {rule.question}"
+
+
 @app.command
 def rules(config: ConfigOption = None) -> None:
     """List the rules that are enabled for this project."""
     loaded = load_config(Path.cwd(), config)
     assert loaded.rules, "Config must define rules"
-    for name, rule in loaded.rules.items():
-        if rule.enabled:
-            scope = ", ".join(rule.languages) if rule.languages else "all languages"
-            if rule.files:
-                scope += f" in {len(rule.files)} file patterns"
-            threshold = loaded.threshold if rule.threshold is None else rule.threshold
-            assert 0.0 <= threshold <= 1.0, "Threshold must be in [0, 1]"
-            print(f"{name} ({rule.severity}, threshold {threshold}, {scope}): {rule.question}")
+    enabled = {name: rule for name, rule in loaded.rules.items() if rule.enabled}
+    assert enabled, "At least one rule must be enabled to list"
+    if not console.is_terminal:
+        for name, rule in enabled.items():
+            console.print(describe_rule(loaded, name, rule), soft_wrap=True)
+        return
+    table = Table(show_lines=True, expand=True)
+    table.add_column("Rule", style="bold", no_wrap=True)
+    table.add_column("Severity", no_wrap=True)
+    table.add_column("Question", ratio=1)
+    for name, rule in enabled.items():
+        severity, threshold, scope = rule_fields(loaded, rule)
+        style = SEVERITY_STYLE[severity]
+        question = (
+            rule.question if scope == "all languages" else f"[dim]({scope})[/dim] {rule.question}"
+        )
+        table.add_row(name, f"[{style}]{severity}[/{style}] {threshold:.0%}", question)
+    console.print(table)
 
 
 @app.command
@@ -153,10 +231,17 @@ def review(rule: str, *, limit: Positive = 20, config: ConfigOption = None) -> i
     for uhash, language, source, name, path, line, probability in store.query(
         SAMPLE, (rule, limit)
     ):
+        if not 0.0 <= probability <= 1.0:
+            print(
+                f"nouls: skipping {name} at {display(path)}:{line + 1}: "
+                f"corrupt stored probability {probability}",
+                file=sys.stderr,
+            )
+            continue
         console.rule(f"{name}  {display(path)}:{line + 1}  p={probability:.2f}")
         console.print(Syntax(source, language, line_numbers=True, start_line=line + 1))
-        assert 0.0 <= probability <= 1.0, "Stored probability must be in [0, 1]"
         answer = Prompt.ask("Real problem?", choices=["y", "n", "s", "q"], default="s")
+        assert answer in {"y", "n", "s", "q"}, "Prompt must return one of its offered choices"
         if answer == "q":
             return 0
         if answer in {"y", "n"}:

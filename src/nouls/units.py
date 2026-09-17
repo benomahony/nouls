@@ -1,9 +1,34 @@
+import gc
 from dataclasses import dataclass
+from functools import lru_cache
 
-from tree_sitter import Node
-from tree_sitter_language_pack import get_parser
+from tree_sitter import Node, Parser
+from tree_sitter_language_pack import get_parser as _get_parser
 
 from nouls.config import Language
+
+_gc_disabled = False
+
+
+def _disable_cyclic_gc() -> None:
+    # tree-sitter's Tree/Node objects are unsafe under CPython's cyclic
+    # collector: collecting one mid-traversal, or even later once it's
+    # garbage, reliably segfaults. Refcounting alone still frees them
+    # promptly, so disabling the cyclic collector once is enough.
+    global _gc_disabled
+    if not _gc_disabled:
+        gc.disable()
+        _gc_disabled = True
+    assert _gc_disabled, "The disable-once flag must be set after this call"
+    assert not gc.isenabled(), "Cyclic GC must stay disabled once tree-sitter has parsed anything"
+
+
+@lru_cache(maxsize=None)
+def get_parser(grammar: str) -> Parser:
+    assert grammar, "Grammar name must not be empty"
+    parser = _get_parser(grammar)
+    assert parser is not None, "tree-sitter-language-pack must return a parser"
+    return parser
 
 
 @dataclass(frozen=True)
@@ -50,9 +75,11 @@ def headline(node: Node, source: str) -> Span:
 
 def extract_units(text: str, language: Language) -> list[Unit]:
     assert language.units, "Language must declare unit node types"
-    root = get_parser(language.grammar).parse(text.encode()).root_node
+    _disable_cyclic_gc()
     kinds = set(language.units)
     units: list[Unit] = []
+    tree = get_parser(language.grammar).parse(text.encode())
+    root = tree.root_node
     stack = [root]
     while stack:
         node = stack.pop()

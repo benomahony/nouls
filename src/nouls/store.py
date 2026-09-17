@@ -152,11 +152,22 @@ class Store:
                 (rule, unit_hash, int(real), now()),
             )
 
-    def replace_observations(
-        self, path: str, language: str, model: str, observations: Sequence[Observation]
+    def record_results(
+        self,
+        path: str,
+        language: str,
+        model: str,
+        observations: Sequence[Observation],
+        units: int,
+        asked: int,
+        cached: int,
+        input_tokens: int,
+        output_tokens: int,
     ) -> None:
         assert path, "Path must not be empty"
         assert all(0.0 <= o.probability <= 1.0 for o in observations), "Probabilities in [0, 1]"
+        assert asked >= 0, "Asked count must not be negative"
+        assert cached >= 0, "Cached count must not be negative"
         seen = now()
         with self.db:
             self.db.execute("DELETE FROM observations WHERE path = ?", (path,))
@@ -180,16 +191,9 @@ class Store:
                     for o in observations
                 ],
             )
-
-    def record_run(
-        self, path: str, units: int, asked: int, cached: int, input_tokens: int, output_tokens: int
-    ) -> None:
-        assert asked >= 0, "Asked count must not be negative"
-        assert cached >= 0, "Cached count must not be negative"
-        with self.db:
             self.db.execute(
                 "INSERT INTO runs VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (now(), path, units, asked, cached, input_tokens, output_tokens),
+                (seen, path, units, asked, cached, input_tokens, output_tokens),
             )
 
     def query(self, sql: str, params: Sequence[object] = ()) -> list[tuple]:
