@@ -59,7 +59,8 @@ def rules(config: ConfigOption = None) -> None:
     for name, rule in loaded.rules.items():
         if rule.enabled:
             scope = ", ".join(rule.languages) if rule.languages else "all languages"
-            print(f"{name} ({rule.severity}, {scope}): {rule.question}")
+            threshold = loaded.threshold if rule.threshold is None else rule.threshold
+            print(f"{name} ({rule.severity}, threshold {threshold}, {scope}): {rule.question}")
 
 
 @app.command
