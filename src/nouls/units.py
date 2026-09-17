@@ -17,8 +17,14 @@ class Span:
 @dataclass(frozen=True)
 class Unit:
     kind: str
+    name: str
     source: str
     span: Span
+    first_line: int
+    last_line: int
+
+    def contains(self, line: int) -> bool:
+        return self.first_line <= line <= self.last_line
 
 
 def headline(node: Node, source: str) -> Span:
@@ -43,6 +49,10 @@ def extract_units(text: str, language: Language) -> list[Unit]:
         node = stack.pop()
         if node.type in kinds and node.text:
             source = node.text.decode()
-            units.append(Unit(node.type, source, headline(node, source)))
+            name = node.child_by_field_name("name")
+            label = name.text.decode() if name is not None and name.text else source.split("\n", 1)[0].strip()
+            units.append(
+                Unit(node.type, label, source, headline(node, source), node.start_point.row, node.end_point.row)
+            )
         stack.extend(node.children)
     return sorted(units, key=lambda unit: (unit.span.line, unit.span.column))

@@ -7,6 +7,8 @@ import yaml
 from pydantic import BaseModel
 from tree_sitter_language_pack import SupportedLanguage
 
+from nouls.store import default_path
+
 CONFIG_NAMES = ("nouls.yaml", "nouls.yml", ".nouls.yaml", ".nouls.yml")
 
 Severity = Literal["error", "warning", "info", "hint"]
@@ -34,9 +36,14 @@ class Config(BaseModel):
     concurrency: int
     debounce_ms: int
     show_probability: bool
+    lint_on: Literal["change", "save"]
+    store: Path | None = None
     exclude: list[str]
     languages: dict[str, Language]
     rules: dict[str, Rule]
+
+    def store_path(self) -> Path:
+        return self.store.expanduser() if self.store else default_path()
 
     def language_for(self, path: Path) -> str | None:
         return next(

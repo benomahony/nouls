@@ -54,9 +54,39 @@ export TYPESAFE_API_KEY="your-api-key"
 nouls check src/
 nouls rules
 nouls serve
+nouls label src/billing.py 42 unit_mismatch false
+nouls review unit_mismatch
+nouls stats rules
+nouls stats hotspots
+nouls stats cost
+nouls stats thresholds unit_mismatch --ask
 ```
 
 `check` prints `path:line:column: severity [rule] message (probability)` and exits 1 when an error level rule fires. Set `show_probability: false` to drop the probability from both the command line and editor diagnostics.
+
+## Store
+
+Every answer lives in one SQLite file, `~/.cache/nouls/nouls.db` by default, shared by the language server, the command line and every repo on the machine. It runs in WAL mode, so several processes can use it at once.
+
+- `answers` caches one probability per model, question and function source. Rewording a rule only re-asks that rule. Editing a function only re-asks that function.
+- `observations` holds the latest answer for every rule on every function in every file checked.
+- `labels` holds your verdicts. A finding labelled `false` is no longer reported for that function.
+- `runs` records questions asked, cache hits and tokens for every file checked.
+
+## Labels and thresholds
+
+Label findings from the editor with the `not a problem` and `confirm finding` code actions, from the command line with `nouls label`, or in bulk with `nouls review`. `review` shows unlabelled functions for one rule, sampled evenly across probability bands, so the labels cover misses as well as hits.
+
+`nouls stats thresholds` compares your labels with the current wording of each question and prints precision and recall at a range of thresholds. Labels belong to the rule, not the wording, so you can rewrite a question, run `nouls stats thresholds --ask` to re-ask it for every labelled function, and compare.
+
+`nouls stats rules` shows how often each rule fires, how many answers sit in the ambiguous 0.35 to 0.65 band, and a histogram of probabilities. A well posed question piles up at both ends.
+
+For anything else, attach the store read only from DuckDB:
+
+```sql
+ATTACH '~/.cache/nouls/nouls.db' AS nouls (TYPE sqlite, READ_ONLY);
+SELECT rule, quantile_cont(probability, [0.1, 0.5, 0.9]) FROM nouls.observations GROUP BY rule;
+```
 
 ## Configuration
 
@@ -68,6 +98,8 @@ threshold: 0.8
 concurrency: 8
 debounce_ms: 1000
 show_probability: true
+lint_on: change
+store: ~/.cache/nouls/nouls.db
 exclude: [".*", node_modules, __pycache__, target, dist, build, venv]
 
 languages:
@@ -89,6 +121,8 @@ rules:
   test_not_isolated:
     files: ["*_test.py", "*/integration/*.py"]
 ```
+
+`lint_on: save` stops the language server checking while you type. `store` moves the SQLite file.
 
 `files` limits a rule to file names or paths matching any of its globs. Setting it replaces the default list.
 

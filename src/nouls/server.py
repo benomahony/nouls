@@ -9,6 +9,7 @@ from typesafe_sdk import AsyncTypeSafeClient
 
 from nouls.analyser import Analyser, Finding
 from nouls.config import load_config
+from nouls.store import Store
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,8 @@ class NoulsServer(LanguageServer):
     def analyser(self) -> Analyser:
         if self._analyser is None:
             root = Path(self.workspace.root_path or Path.cwd())
-            self._analyser = Analyser(load_config(root), AsyncTypeSafeClient())
+            config = load_config(root)
+            self._analyser = Analyser(config, AsyncTypeSafeClient(), Store(config.store_path()))
         return self._analyser
 
 
@@ -47,6 +49,7 @@ def to_diagnostic(finding: Finding, show_probability: bool) -> types.Diagnostic:
         severity=SEVERITIES[finding.severity],
         code=finding.rule,
         source="nouls",
+        data={"unit_hash": finding.unit_hash},
     )
 
 
@@ -85,7 +88,8 @@ def did_open(ls: NoulsServer, params: types.DidOpenTextDocumentParams) -> None:
 
 @server.feature(types.TEXT_DOCUMENT_DID_CHANGE)
 def did_change(ls: NoulsServer, params: types.DidChangeTextDocumentParams) -> None:
-    schedule(ls, params.text_document.uri)
+    if ls.analyser.config.lint_on == "change":
+        schedule(ls, params.text_document.uri)
 
 
 @server.feature(types.TEXT_DOCUMENT_DID_SAVE)
@@ -98,3 +102,32 @@ def did_close(ls: NoulsServer, params: types.DidCloseTextDocumentParams) -> None
     if task := ls.pending.pop(params.text_document.uri, None):
         task.cancel()
     ls.text_document_publish_diagnostics(types.PublishDiagnosticsParams(uri=params.text_document.uri, diagnostics=[]))
+
+
+@server.feature(
+    types.TEXT_DOCUMENT_CODE_ACTION,
+    types.CodeActionOptions(code_action_kinds=[types.CodeActionKind.QuickFix]),
+)
+def code_actions(ls: NoulsServer, params: types.CodeActionParams) -> list[types.CodeAction]:
+    uri = params.text_document.uri
+    return [
+        types.CodeAction(
+            title=f"nouls: {title} ({diagnostic.code})",
+            kind=types.CodeActionKind.QuickFix,
+            diagnostics=[diagnostic],
+            command=types.Command(
+                title=title,
+                command="nouls.label",
+                arguments=[uri, diagnostic.code, diagnostic.data["unit_hash"], real],
+            ),
+        )
+        for diagnostic in params.context.diagnostics
+        if diagnostic.source == "nouls" and isinstance(diagnostic.data, dict)
+        for title, real in (("not a problem", False), ("confirm finding", True))
+    ]
+
+
+@server.command("nouls.label")
+def label(ls: NoulsServer, uri: str, rule: str, unit_hash: str, real: bool) -> None:
+    ls.analyser.store.label(rule, unit_hash, real)
+    schedule(ls, uri)
