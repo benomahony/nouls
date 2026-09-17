@@ -97,3 +97,74 @@ rules:
     question: Does the function mix high level business steps with low level mechanical detail, such as parsing, raw SQL or byte handling, in the same body?
     message: Function mixes levels of abstraction
     severity: info
+  test_not_isolated:
+    question: Is this a test whose result could change depending on which other tests ran before it, for example because it reads or mutates module level, class level, database or filesystem state that other tests also touch without resetting it?
+    message: Test is not isolated from other tests
+    severity: warning
+    files: &test_files
+      - test_*.py
+      - "*_test.py"
+      - "*_test.go"
+      - "*.test.[jt]s"
+      - "*.test.[jt]sx"
+      - "*.spec.[jt]s"
+      - "*.spec.[jt]sx"
+      - "*Test.java"
+      - "*Tests.java"
+      - "*_spec.rb"
+      - "*_test.rb"
+      - "*_spec.lua"
+      - "*_test.lua"
+      - "*/tests/*.rs"
+      - "*_test.c"
+      - "*_test.cpp"
+  test_not_composable:
+    question: Is this a test that varies several independent dimensions of behaviour at once, so they cannot be checked separately and combined, for example one test covering every combination of inputs, formats and error modes?
+    message: Test couples independent dimensions of variability
+    severity: info
+    files: *test_files
+  test_nondeterministic:
+    question: Is this a test whose result could change between runs with no code change, because it depends on the current time, unseeded randomness, real network calls, sleeps or timing, thread scheduling or unordered iteration?
+    message: Test result is not deterministic
+    severity: error
+    files: *test_files
+  test_slow:
+    question: Is this a test that would run slowly, because it sleeps, waits on timeouts, calls real external services or databases, or loops over far more data than the behaviour needs?
+    message: Test is likely to be slow
+    severity: warning
+    files: *test_files
+  test_hard_to_write:
+    question: Is this a test whose setup is large or elaborate relative to the behaviour it checks, such as many mocks, long object construction or copied fixtures, suggesting the code under test is expensive to test?
+    message: Test is expensive to write relative to what it checks
+    severity: info
+    files: *test_files
+  test_unreadable:
+    question: Is this a test where a reader could not tell from its name and body what behaviour it checks and why, for example a vague name, unexplained magic values or no clear arrange, act and assert steps?
+    message: Test does not make its motivation clear
+    severity: info
+    files: *test_files
+  test_not_behavioural:
+    question: Is this a test that would still pass if the behaviour it claims to check were broken, for example because it asserts nothing, asserts only that no exception was raised, or asserts on values it set up itself?
+    message: Test is not sensitive to the behaviour it names
+    severity: error
+    files: *test_files
+  test_structure_sensitive:
+    question: Is this a test that would fail after a refactoring that keeps behaviour the same, because it asserts on private attributes, internal call order, mock call counts of internal collaborators or other implementation details?
+    message: Test is coupled to implementation structure
+    severity: warning
+    files: *test_files
+  test_not_automated:
+    question: Is this a test that needs human intervention, for example reading input, printing output for someone to inspect instead of asserting, opening a browser or depending on manual setup steps?
+    message: Test needs human intervention
+    severity: error
+    files: *test_files
+  test_not_specific:
+    question: Is this a test where a failure would not point to an obvious cause, because it checks several unrelated behaviours in one test or asserts on a large opaque value without saying what matters?
+    message: A failure in this test would not point to a clear cause
+    severity: warning
+    files: *test_files
+  test_not_predictive:
+    question: Is this a test that could pass while the real code would fail in production, because it mocks or stubs out the very behaviour it claims to test or replaces it with a simplified fake?
+    message: Test passing does not predict production behaviour
+    severity: warning
+    files: *test_files

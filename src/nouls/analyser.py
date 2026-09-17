@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 from dataclasses import dataclass
+from pathlib import Path
 
 from typesafe_sdk import AsyncTypeSafeClient, Noul
 
@@ -51,8 +52,8 @@ class Analyser:
             del self._cache[next(iter(self._cache))]
         return answers
 
-    async def analyse(self, text: str, language: str) -> list[Finding]:
-        rules = self.config.rules_for(language)
+    async def analyse(self, text: str, language: str, path: Path) -> list[Finding]:
+        rules = self.config.rules_for(language, path)
         if not rules:
             return []
         units = extract_units(text, self.config.languages[language])

@@ -24,6 +24,7 @@ class Rule(BaseModel):
     severity: Severity = "warning"
     threshold: float | None = None
     languages: list[str] | None = None
+    files: list[str] | None = None
     enabled: bool = True
 
 
@@ -43,11 +44,13 @@ class Config(BaseModel):
             None,
         )
 
-    def rules_for(self, language: str) -> dict[str, Rule]:
+    def rules_for(self, language: str, path: Path) -> dict[str, Rule]:
         return {
             name: rule
             for name, rule in self.rules.items()
-            if rule.enabled and (rule.languages is None or language in rule.languages)
+            if rule.enabled
+            and (rule.languages is None or language in rule.languages)
+            and (rule.files is None or any(fnmatch(path.name, p) or fnmatch(path.as_posix(), p) for p in rule.files))
         }
 
     def excluded(self, path: Path) -> bool:

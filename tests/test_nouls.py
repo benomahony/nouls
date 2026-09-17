@@ -21,6 +21,8 @@ def total(items: list[int]) -> int:
     return sum(items)
 """
 
+APP = Path("src/app.py")
+
 
 @dataclass
 class Answer:
@@ -49,7 +51,7 @@ def config(tmp_path: Path):
 
 async def test_flags_only_the_offending_function(config) -> None:
     client = FakeClient()
-    findings = await Analyser(config, client).analyse(PYTHON, "python")
+    findings = await Analyser(config, client).analyse(PYTHON, "python", APP)
     assert [(f.rule, f.severity, f.span.line, f.span.column) for f in findings] == [("unit_mismatch", "error", 4, 8)]
     assert len(client.calls) == 2
 
@@ -57,8 +59,8 @@ async def test_flags_only_the_offending_function(config) -> None:
 async def test_unchanged_functions_are_cached(config) -> None:
     client = FakeClient()
     analyser = Analyser(config, client)
-    await analyser.analyse(PYTHON, "python")
-    await analyser.analyse(PYTHON.replace("sum(items)", "sum(items) + 0"), "python")
+    await analyser.analyse(PYTHON, "python", APP)
+    await analyser.analyse(PYTHON.replace("sum(items)", "sum(items) + 0"), "python", APP)
     assert len(client.calls) == 3
 
 
@@ -68,11 +70,11 @@ async def test_project_yaml_disables_and_scopes_rules(tmp_path: Path) -> None:
         "  go_only:\n    question: Is this Go?\n    message: Go\n    languages: [go]\n"
     )
     config = load_config(tmp_path / "nested")
-    python_rules = config.rules_for("python")
+    python_rules = config.rules_for("python", APP)
     assert "docstring_drift" not in python_rules
     assert "go_only" not in python_rules
-    assert "go_only" in config.rules_for("go")
-    findings = await Analyser(config, FakeClient()).analyse(PYTHON, "python")
+    assert "go_only" in config.rules_for("go", Path("main.go"))
+    findings = await Analyser(config, FakeClient()).analyse(PYTHON, "python", APP)
     assert [f.rule for f in findings] == ["unit_mismatch"]
 
 
@@ -104,7 +106,26 @@ def test_discover_skips_excluded_and_unknown_files(config, tmp_path: Path) -> No
 
 
 async def test_render_is_one_based(config) -> None:
-    findings = await Analyser(config, FakeClient()).analyse(PYTHON, "python")
+    findings = await Analyser(config, FakeClient()).analyse(PYTHON, "python", APP)
     assert render(Path("a.py"), findings[0], True).startswith("a.py:5:9: error [unit_mismatch]")
     assert render(Path("a.py"), findings[0], True).endswith("(95%)")
     assert render(Path("a.py"), findings[0], False).endswith("without conversion")
+
+
+def test_desiderata_rules_only_apply_to_test_files(config) -> None:
+    desiderata = {name for name in config.rules if name.startswith("test_")}
+    assert len(desiderata) == 11
+    for path in [
+        "tests/test_orders.py",
+        "orders_test.go",
+        "web/cart.spec.tsx",
+        "src/OrderTest.java",
+        "crate/tests/api.rs",
+    ]:
+        language = config.language_for(Path(path))
+        assert language is not None
+        assert desiderata <= set(config.rules_for(language, Path(path))), path
+    for path in ["src/orders.py", "orders.go", "web/cart.tsx", "src/lib.rs"]:
+        language = config.language_for(Path(path))
+        assert language is not None
+        assert not desiderata & set(config.rules_for(language, Path(path))), path

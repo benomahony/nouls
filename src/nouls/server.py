@@ -54,11 +54,12 @@ async def lint(ls: NoulsServer, uri: str) -> None:
     analyser = ls.analyser
     await asyncio.sleep(analyser.config.debounce_ms / 1000)
     document = ls.workspace.get_text_document(uri)
-    language = analyser.config.language_for(Path(document.path))
+    path = Path(document.path)
+    language = analyser.config.language_for(path)
     if language is None:
         return
     try:
-        findings = await analyser.analyse(document.source, language)
+        findings = await analyser.analyse(document.source, language, path)
     except Exception:
         logger.exception("nouls analysis failed for %s", uri)
         return

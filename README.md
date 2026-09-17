@@ -22,6 +22,24 @@ The default rules target intent, not syntax:
 
 Anything ruff, a type checker or a security scanner already catches is deliberately out of scope.
 
+Test files also get rules drawn from Kent Beck's [Test Desiderata](https://testdesiderata.com). Each asks whether a test violates one property. Inspiring is left out because it describes a whole suite, not a single test.
+
+| Rule | Desideratum | Severity |
+| --- | --- | --- |
+| `test_not_isolated` | Isolated | warning |
+| `test_not_composable` | Composable | info |
+| `test_nondeterministic` | Deterministic | error |
+| `test_slow` | Fast | warning |
+| `test_hard_to_write` | Writable | info |
+| `test_unreadable` | Readable | info |
+| `test_not_behavioural` | Behavioural | error |
+| `test_structure_sensitive` | Structure insensitive | warning |
+| `test_not_automated` | Automated | error |
+| `test_not_specific` | Specific | warning |
+| `test_not_predictive` | Predictive | warning |
+
+They only run on files matching the default test patterns, such as `test_*.py`, `*_test.go`, `*.spec.ts`, `*Test.java` and `*/tests/*.rs`. Rust unit tests inside `mod tests` in a source file are not matched.
+
 ## Install
 
 ```bash
@@ -67,7 +85,11 @@ rules:
     message: Debit and credit signs look inverted
     severity: error
     languages: [python, go]
+  test_not_isolated:
+    files: ["*_test.py", "*/integration/*.py"]
 ```
+
+`files` limits a rule to file names or paths matching any of its globs. Setting it replaces the default list.
 
 Languages are pure configuration. `grammar` is any name from [tree-sitter-language-pack](https://github.com/Goldziher/tree-sitter-language-pack), and `units` lists the node types to send as individual questions. The diagnostic sits on the node's `name` field, or its first line when it has none.
 

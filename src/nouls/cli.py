@@ -36,7 +36,9 @@ async def run_check(paths: list[Path], config: Config) -> int:
     async with AsyncTypeSafeClient() as client:
         analyser = Analyser(config, client)
         files = list(discover(paths, config))
-        results = await asyncio.gather(*(analyser.analyse(path.read_text(), language) for path, language in files))
+        results = await asyncio.gather(
+            *(analyser.analyse(path.read_text(), language, path) for path, language in files)
+        )
     findings = [(path, finding) for (path, _), found in zip(files, results) for finding in found]
     for path, finding in findings:
         print(render(path, finding, config.show_probability))
@@ -59,6 +61,8 @@ def rules(config: ConfigOption = None) -> None:
     for name, rule in loaded.rules.items():
         if rule.enabled:
             scope = ", ".join(rule.languages) if rule.languages else "all languages"
+            if rule.files:
+                scope += f" in {len(rule.files)} file patterns"
             threshold = loaded.threshold if rule.threshold is None else rule.threshold
             print(f"{name} ({rule.severity}, threshold {threshold}, {scope}): {rule.question}")
 
