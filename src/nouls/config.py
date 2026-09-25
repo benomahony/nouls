@@ -14,10 +14,18 @@ CONFIG_NAMES = ("nouls.yaml", "nouls.yml", ".nouls.yaml", ".nouls.yml")
 Severity = Literal["error", "warning", "info", "hint"]
 
 
+class Calls(BaseModel):
+    node: str
+    callee: str
+    names: list[str]
+
+
 class Language(BaseModel):
     grammar: SupportedLanguage
     extensions: list[str]
     units: list[str]
+    attached: list[str] = []
+    calls: Calls | None = None
 
 
 class Rule(BaseModel):
@@ -39,6 +47,7 @@ class Config(BaseModel):
     lint_on: Literal["change", "save"]
     store: Path | None = None
     exclude: list[str]
+    test_files: list[str] = []
     languages: dict[str, Language]
     rules: dict[str, Rule]
 
@@ -56,6 +65,11 @@ class Config(BaseModel):
             None,
         )
 
+    def is_test(self, path: Path) -> bool:
+        assert path.name, "Path must name a file"
+        assert all(self.test_files), "Test file patterns must not be empty"
+        return matches(path, self.test_files)
+
     def rules_for(self, language: str, path: Path) -> dict[str, Rule]:
         assert language in self.languages, "Language must be configured"
         selected = {
@@ -63,10 +77,7 @@ class Config(BaseModel):
             for name, rule in self.rules.items()
             if rule.enabled
             and (rule.languages is None or language in rule.languages)
-            and (
-                rule.files is None
-                or any(fnmatch(path.name, p) or fnmatch(path.as_posix(), p) for p in rule.files)
-            )
+            and (rule.files is None or matches(path, rule.files))
         }
         assert all(rule.enabled for rule in selected.values()), "Only enabled rules may apply"
         return selected
@@ -75,6 +86,12 @@ class Config(BaseModel):
         assert not path.is_absolute(), "Exclusion applies to paths relative to the search root"
         assert all(self.exclude), "Exclude patterns must not be empty"
         return any(fnmatch(part, pattern) for part in path.parts for pattern in self.exclude)
+
+
+def matches(path: Path, patterns: list[str]) -> bool:
+    assert all(patterns), "File patterns must not be empty"
+    assert path.name, "Path must name a file"
+    return any(fnmatch(path.name, p) or fnmatch(path.as_posix(), p) for p in patterns)
 
 
 def merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:

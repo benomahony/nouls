@@ -35,7 +35,7 @@ def test_help_and_rules_run_as_a_real_process(tmp_path: Path) -> None:
         [NOULS, "rules"], capture_output=True, text=True, check=True, cwd=tmp_path
     ).stdout
     assert "Usage examples:" in help_text
-    assert len(rules.splitlines()) == 23
+    assert len(rules.splitlines()) == 25
 
 
 def test_language_server_handshake_over_stdio(tmp_path: Path) -> None:
@@ -63,3 +63,21 @@ def test_language_server_handshake_over_stdio(tmp_path: Path) -> None:
     assert capabilities["executeCommandProvider"] == {"commands": ["nouls.label"]}
     assert replies[2]["result"] is None
     assert result.returncode == 0
+
+
+def test_extracting_units_repeatedly_does_not_corrupt_the_heap() -> None:
+    # tree-sitter 0.26.0 corrupted the Python heap, segfaulting later in GC or sort.
+    script = (
+        "import gc, glob, rich\n"
+        "from pathlib import Path\n"
+        "from nouls.config import load_config\n"
+        "from nouls.units import extract_units\n"
+        "gc.set_threshold(10)\n"
+        "language = load_config(Path.cwd()).languages['python']\n"
+        "sources = [Path(f).read_text() for f in glob.glob(rich.__path__[0] + '/*.py')]\n"
+        "for _ in range(20):\n"
+        "    for source in sources:\n"
+        "        extract_units(source, language)\n"
+    )
+    result = subprocess.run([sys.executable, "-c", script], capture_output=True, timeout=300)
+    assert result.returncode == 0, f"exit {result.returncode}: {result.stderr.decode()}"

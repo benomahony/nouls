@@ -39,7 +39,16 @@ Test files also get rules drawn from Kent Beck's [Test Desiderata](https://testd
 | `test_not_predictive` | Predictive | warning |
 | `test_not_inspiring` | Inspiring | warning |
 
-They only run on files matching the default test patterns, such as `test_*.py`, `*_test.go`, `*.spec.ts`, `*Test.java` and `*/tests/*.rs`. Rust unit tests inside `mod tests` in a source file are not matched.
+Two more rules cover fixtures, setup and teardown hooks and shared test helpers.
+
+| Rule | Severity |
+| --- | --- |
+| `fixture_leaks_state` | warning |
+| `fixture_hides_behaviour` | warning |
+
+The test rules only run on files matching `test_files`, such as `test_*.py`, `conftest.py`, `*_test.go`, `*.spec.ts`, `*Test.java`, `spec/*.rb` and `*/tests/*.rs`. Rust unit tests inside `mod tests` in a source file are not matched.
+
+Every test rule asks about a test case and every fixture rule about a fixture or hook, so each kind of function is judged only by its own rules. Decorators and attributes such as `@pytest.fixture`, `#[fixture]` and `@BeforeEach` are sent along with the function so the model can tell them apart. In test files, calls such as Jest's `it` and `beforeEach`, RSpec's `it`, `let` and `before`, and busted's `it` and `before_each` are also sent as functions.
 
 ## Installation
 
@@ -107,6 +116,11 @@ languages:
     grammar: kotlin
     extensions: [.kt, .kts]
     units: [function_declaration]
+    attached: [annotation]
+    calls:
+      node: call_expression
+      callee: function
+      names: [test, beforeTest]
 
 rules:
   mixed_abstraction:
@@ -126,7 +140,7 @@ rules:
 
 `files` limits a rule to file names or paths matching any of its globs. Setting it replaces the default list.
 
-Languages are pure configuration. `grammar` is any name from [tree-sitter-language-pack](https://github.com/Goldziher/tree-sitter-language-pack), and `units` lists the node types to send as individual questions. The diagnostic sits on the node's `name` field, or its first line when it has none.
+Languages are pure configuration. `grammar` is any name from [tree-sitter-language-pack](https://github.com/Goldziher/tree-sitter-language-pack), and `units` lists the node types to send as individual questions. The diagnostic sits on the node's `name` field, or its first line when it has none. `attached` lists wrapper or preceding sibling node types, such as decorators, that belong to a unit. `calls` makes calls with a matching callee name into units, but only in files matching `test_files`.
 
 Every question is answered against this state:
 

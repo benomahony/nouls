@@ -103,14 +103,11 @@ class Analyser:
         return result
 
     def parse(self, text: str, language: str, path: Path) -> Parsed | None:
-        # Tree-sitter's parse tree must be fully built and discarded before any
-        # concurrent network I/O runs in the same process: see units.py's
-        # _disable_cyclic_gc for why the two can't safely overlap in time.
         assert language in self.config.languages, "Language must be configured"
         rules = self.config.rules_for(language, path)
         if not rules:
             return None
-        units = extract_units(text, self.config.languages[language])
+        units = extract_units(text, self.config.languages[language], self.config.is_test(path))
         hashes = [unit_hash(language, unit.source) for unit in units]
         assert len(hashes) == len(units), "Every unit must have a hash"
         self.store.save_units(language, list(zip(hashes, (unit.source for unit in units))))

@@ -102,6 +102,57 @@ def test_units_are_found_from_yaml_node_types(
     assert all(unit.span.end_column > unit.span.column for unit in units)
 
 
+@pytest.mark.parametrize(
+    ("language", "path", "source", "expected"),
+    [
+        (
+            "python",
+            "tests/conftest.py",
+            "@pytest.fixture\ndef db():\n    yield 1\n",
+            ["@pytest.fixture\ndef db():\n    yield 1"],
+        ),
+        ("rust", "crate/tests/api.rs", "#[test]\nfn f() {}\n", ["#[test]\nfn f() {}"]),
+        (
+            "typescript",
+            "web/cart.spec.ts",
+            "describe('cart', () => {\n  beforeEach(() => {});\n  it('adds', () => {});\n});\n",
+            ["beforeEach(() => {})", "it('adds', () => {})"],
+        ),
+        (
+            "ruby",
+            "spec/cart_spec.rb",
+            "describe Cart do\n  let!(:cart) { Cart.new }\n  it 'adds' do\n  end\nend\n",
+            ["let!(:cart) { Cart.new }", "it 'adds' do\n  end"],
+        ),
+        (
+            "lua",
+            "spec/cart_spec.lua",
+            "describe('cart', function()\n  before_each(function() end)\nend)\n",
+            ["before_each(function() end)"],
+        ),
+    ],
+)
+def test_fixtures_and_hooks_are_units_with_their_decorators(
+    config, language: str, path: str, source: str, expected: list[str]
+) -> None:
+    assert config.is_test(Path(path))
+    units = extract_units(source, config.languages[language], config.is_test(Path(path)))
+    assert [unit.source for unit in units] == expected
+
+
+def test_test_calls_are_not_units_outside_test_files(config) -> None:
+    source = "beforeEach(() => {});\nit('adds', () => {});\n"
+    assert not config.is_test(Path("web/cart.ts"))
+    assert extract_units(source, config.languages["typescript"]) == []
+
+
+def test_a_decorated_function_is_labelled_by_line_from_its_decorator(config) -> None:
+    source = "@pytest.fixture\ndef db():\n    yield 1\n"
+    [unit] = extract_units(source, config.languages["python"])
+    assert (unit.first_line, unit.span.line) == (0, 1)
+    assert unit.contains(0)
+
+
 def test_discover_skips_excluded_and_unknown_files(config, tmp_path: Path) -> None:
     (tmp_path / "app.py").write_text("")
     (tmp_path / "notes.txt").write_text("")
@@ -122,14 +173,16 @@ async def test_render_is_one_based(config, store) -> None:
 
 
 def test_desiderata_rules_only_apply_to_test_files(config) -> None:
-    desiderata = {name for name in config.rules if name.startswith("test_")}
-    assert len(desiderata) == 12
+    desiderata = {name for name in config.rules if name.startswith(("test_", "fixture_"))}
+    assert len(desiderata) == 14
     for path in [
         "tests/test_orders.py",
         "orders_test.go",
         "web/cart.spec.tsx",
         "src/OrderTest.java",
         "crate/tests/api.rs",
+        "tests/conftest.py",
+        "spec/support/helpers.rb",
     ]:
         language = config.language_for(Path(path))
         assert language is not None

@@ -7,23 +7,70 @@ lint_on: change
 
 exclude: [".*", node_modules, __pycache__, target, dist, build, venv]
 
+test_files: &test_files
+    - test_*.py
+    - "*_test.py"
+    - "*_test.go"
+    - "*.test.[jt]s"
+    - "*.test.[jt]sx"
+    - "*.spec.[jt]s"
+    - "*.spec.[jt]sx"
+    - "*Test.java"
+    - "*Tests.java"
+    - "*_spec.rb"
+    - "*_test.rb"
+    - "*_spec.lua"
+    - "*_test.lua"
+    - "*/tests/*.rs"
+    - "*_test.c"
+    - "*_test.cpp"
+    - conftest.py
+    - "src/test/*.java"
+    - "*/src/test/*.java"
+    - "spec/*.rb"
+    - "*/spec/*.rb"
+    - "test/*.rb"
+    - "*/test/*.rb"
+    - "__tests__/*"
+    - "*/__tests__/*"
+    - jest.setup.[jt]s
+    - vitest.setup.[jt]s
+    - setupTests.[jt]s
+    - "spec/*.lua"
+    - "*/spec/*.lua"
+
 languages:
   python:
     grammar: python
     extensions: [.py]
     units: [function_definition]
+    attached: [decorated_definition]
   javascript:
     grammar: javascript
     extensions: [.js, .jsx, .mjs, .cjs]
     units: [function_declaration, method_definition]
+    calls:
+      node: call_expression
+      callee: function
+      names: [it, test, beforeEach, afterEach, beforeAll, afterAll]
   typescript:
     grammar: typescript
     extensions: [.ts, .mts, .cts]
     units: [function_declaration, method_definition]
+    attached: [decorator]
+    calls:
+      node: call_expression
+      callee: function
+      names: [it, test, beforeEach, afterEach, beforeAll, afterAll]
   tsx:
     grammar: tsx
     extensions: [.tsx]
     units: [function_declaration, method_definition]
+    attached: [decorator]
+    calls:
+      node: call_expression
+      callee: function
+      names: [it, test, beforeEach, afterEach, beforeAll, afterAll]
   go:
     grammar: go
     extensions: [.go]
@@ -32,6 +79,7 @@ languages:
     grammar: rust
     extensions: [.rs]
     units: [function_item]
+    attached: [attribute_item]
   java:
     grammar: java
     extensions: [.java]
@@ -48,10 +96,18 @@ languages:
     grammar: lua
     extensions: [.lua]
     units: [function_declaration]
+    calls:
+      node: function_call
+      callee: name
+      names: [it, test, before_each, after_each, setup, teardown, lazy_setup, lazy_teardown]
   ruby:
     grammar: ruby
     extensions: [.rb]
     units: [method, singleton_method]
+    calls:
+      node: call
+      callee: method
+      names: [it, specify, example, test, let, let!, subject, before, after, around, setup, teardown]
 
 rules:
   name_behaviour_mismatch:
@@ -99,78 +155,72 @@ rules:
     message: Function mixes levels of abstraction
     severity: info
   test_not_isolated:
-    question: Is this a test whose result could change depending on which other tests ran before it, for example because it reads or mutates module level, class level, database or filesystem state that other tests also touch without resetting it?
+    question: Is this a test case itself, not a fixture, setup or teardown hook or helper, whose result could change depending on which other tests ran before it, for example because it reads or mutates module level, class level, database or filesystem state that other tests also touch without resetting it?
     message: Test is not isolated from other tests
     severity: warning
-    files: &test_files
-      - test_*.py
-      - "*_test.py"
-      - "*_test.go"
-      - "*.test.[jt]s"
-      - "*.test.[jt]sx"
-      - "*.spec.[jt]s"
-      - "*.spec.[jt]sx"
-      - "*Test.java"
-      - "*Tests.java"
-      - "*_spec.rb"
-      - "*_test.rb"
-      - "*_spec.lua"
-      - "*_test.lua"
-      - "*/tests/*.rs"
-      - "*_test.c"
-      - "*_test.cpp"
+    files: *test_files
   test_not_composable:
-    question: Is this a test that varies several independent dimensions of behaviour at once, so they cannot be checked separately and combined, for example one test covering every combination of inputs, formats and error modes?
+    question: Is this a test case itself, not a fixture, setup or teardown hook or helper, that varies several independent dimensions of behaviour at once, so they cannot be checked separately and combined, for example one test covering every combination of inputs, formats and error modes?
     message: Test couples independent dimensions of variability
     severity: info
     files: *test_files
   test_nondeterministic:
-    question: Is this a test whose result could change between runs with no code change, because it depends on the current time, unseeded randomness, real network calls, sleeps or timing, thread scheduling or unordered iteration?
+    question: Is this a test case itself, not a fixture, setup or teardown hook or helper, whose result could change between runs with no code change, because it depends on the current time, unseeded randomness, real network calls, sleeps or timing, thread scheduling or unordered iteration?
     message: Test result is not deterministic
     severity: error
     files: *test_files
   test_slow:
-    question: Is this a test that would run slowly, because it sleeps, waits on timeouts, calls real external services or databases, or loops over far more data than the behaviour needs?
+    question: Is this a test case itself, not a fixture, setup or teardown hook or helper, that would run slowly, because it sleeps, waits on timeouts, calls real external services or databases, or loops over far more data than the behaviour needs?
     message: Test is likely to be slow
     severity: warning
     files: *test_files
   test_hard_to_write:
-    question: Is this a test whose setup is large or elaborate relative to the behaviour it checks, such as many mocks, long object construction or copied fixtures, suggesting the code under test is expensive to test?
+    question: Is this a test case itself, not a fixture, setup or teardown hook or helper, whose setup is large or elaborate relative to the behaviour it checks, such as many mocks, long object construction or copied fixtures, suggesting the code under test is expensive to test?
     message: Test is expensive to write relative to what it checks
     severity: info
     files: *test_files
   test_unreadable:
-    question: Is this a test where a reader could not tell from its name and body what behaviour it checks and why, for example a vague name, unexplained magic values or no clear arrange, act and assert steps?
+    question: Is this a test case itself, not a fixture, setup or teardown hook or helper, where a reader could not tell from its name and body what behaviour it checks and why, for example a vague name, unexplained magic values or no clear arrange, act and assert steps?
     message: Test does not make its motivation clear
     severity: info
     files: *test_files
   test_not_behavioural:
-    question: Is this a test that would still pass if the behaviour it claims to check were broken, for example because it asserts nothing, asserts only that no exception was raised, or asserts on values it set up itself?
+    question: Is this a test case itself, not a fixture, setup or teardown hook or helper, that would still pass if the behaviour it claims to check were broken, for example because it asserts nothing, asserts only that no exception was raised, or asserts on values it set up itself?
     message: Test is not sensitive to the behaviour it names
     severity: error
     files: *test_files
   test_structure_sensitive:
-    question: Is this a test that would fail after a refactoring that keeps behaviour the same, because it asserts on private attributes, internal call order, mock call counts of internal collaborators or other implementation details?
+    question: Is this a test case itself, not a fixture, setup or teardown hook or helper, that would fail after a refactoring that keeps behaviour the same, because it asserts on private attributes, internal call order, mock call counts of internal collaborators or other implementation details?
     message: Test is coupled to implementation structure
     severity: warning
     files: *test_files
   test_not_automated:
-    question: Is this a test that needs human intervention, for example reading input, printing output for someone to inspect instead of asserting, opening a browser or depending on manual setup steps?
+    question: Is this a test case itself, not a fixture, setup or teardown hook or helper, that needs human intervention, for example reading input, printing output for someone to inspect instead of asserting, opening a browser or depending on manual setup steps?
     message: Test needs human intervention
     severity: error
     files: *test_files
   test_not_specific:
-    question: Is this a test where a failure would not point to an obvious cause, because it checks several unrelated behaviours in one test or asserts on a large opaque value without saying what matters?
+    question: Is this a test case itself, not a fixture, setup or teardown hook or helper, where a failure would not point to an obvious cause, because it checks several unrelated behaviours in one test or asserts on a large opaque value without saying what matters?
     message: A failure in this test would not point to a clear cause
     severity: warning
     files: *test_files
   test_not_predictive:
-    question: Is this a test that could pass while the real code would fail in production, because it mocks or stubs out the very behaviour it claims to test or replaces it with a simplified fake?
+    question: Is this a test case itself, not a fixture, setup or teardown hook or helper, that could pass while the real code would fail in production, because it mocks or stubs out the very behaviour it claims to test or replaces it with a simplified fake?
     message: Test passing does not predict production behaviour
     severity: warning
     files: *test_files
   test_not_inspiring:
-    question: Is this a test that would give a reader little confidence the code works even when it passes, because it checks something trivial or incidental, exercises the framework or language rather than the code under test, covers only the easy path of risky behaviour, or claims in its name more than it actually verifies?
+    question: Is this a test case itself, not a fixture, setup or teardown hook or helper, that would give a reader little confidence the code works even when it passes, because it checks something trivial or incidental, exercises the framework or language rather than the code under test, covers only the easy path of risky behaviour, or claims in its name more than it actually verifies?
     message: Passing this test would not inspire confidence
+    severity: warning
+    files: *test_files
+  fixture_leaks_state:
+    question: Is this a test fixture, setup or teardown hook or shared test helper that changes global, module, environment, filesystem or database state without restoring it afterwards, so tests that use it can affect each other?
+    message: Fixture leaves state behind for other tests
+    severity: warning
+    files: *test_files
+  fixture_hides_behaviour:
+    question: Is this a test fixture, setup hook or shared test helper that replaces, mocks or patches the real behaviour that the tests using it appear to be checking, so they pass without exercising it?
+    message: Fixture stubs out the behaviour its tests appear to check
     severity: warning
     files: *test_files

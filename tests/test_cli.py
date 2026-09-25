@@ -97,7 +97,7 @@ def test_rules_lists_scope_and_threshold(
     run("rules")
     out = capsys.readouterr().out
     assert "unit_mismatch (error, threshold 0.95, python)" in out
-    assert "test_slow (warning, threshold 0.8, all languages in 16 file patterns)" in out
+    assert "test_slow (warning, threshold 0.8, all languages in 30 file patterns)" in out
     assert "mixed_abstraction" not in out
 
 

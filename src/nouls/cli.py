@@ -204,7 +204,7 @@ def label(
         return 2
     units = [
         u
-        for u in extract_units(path.read_text(), loaded.languages[language])
+        for u in extract_units(path.read_text(), loaded.languages[language], loaded.is_test(path))
         if u.contains(line - 1)
     ]
     if not units:
