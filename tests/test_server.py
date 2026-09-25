@@ -114,7 +114,7 @@ async def test_analysis_failures_are_logged_not_raised(
     async def explode(*_: object) -> None:
         raise RuntimeError("TypeSafe unavailable")
 
-    monkeypatch.setattr(ls.analyser, "score", explode)
+    monkeypatch.setattr(ls.analyser, "analyse", explode)
     await lint(ls, "file:///app.py")
     assert ls.published == []
     assert "nouls analysis failed" in caplog.text

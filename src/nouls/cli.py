@@ -110,19 +110,11 @@ async def run_check(paths: list[Path], config: Config) -> int:
     async with AsyncTypeSafeClient() as client:
         analyser = Analyser(config, client, Store(config.store_path()))
         files = list(discover(paths, config))
-        # Every file is parsed here, up front, before any network call starts:
-        # tree-sitter's parse trees must all be built and discarded before
-        # concurrent async I/O begins, not interleaved with it.
-        parsed = [
-            unit
-            for unit in (
-                analyser.parse(path.read_text(), language, path) for path, language in files
-            )
-            if unit is not None
-        ]
-        results = await asyncio.gather(*(analyser.score(p) for p in parsed))
-    assert len(results) == len(parsed), "Every parsed file must have results"
-    findings = [(p.path, finding) for p, found in zip(parsed, results) for finding in found]
+        results = await asyncio.gather(
+            *(analyser.analyse(path.read_text(), language, path) for path, language in files)
+        )
+    assert len(results) == len(files), "Every file must have results"
+    findings = [(path, finding) for (path, _), found in zip(files, results) for finding in found]
     if console.is_terminal:
         render_pretty(findings, config.show_probability)
     else:

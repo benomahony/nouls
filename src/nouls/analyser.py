@@ -6,7 +6,7 @@ from typesafe_sdk import AsyncTypeSafeClient, Noul
 
 from nouls.config import Config, Rule, Severity
 from nouls.store import Observation, Store, digest
-from nouls.units import Span, Unit, extract_units
+from nouls.units import Span, extract_units
 
 
 @dataclass(frozen=True)
@@ -35,15 +35,6 @@ class Asked:
     asked: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
-
-
-@dataclass(frozen=True)
-class Parsed:
-    path: Path
-    language: str
-    rules: dict[str, Rule]
-    units: list[Unit]
-    hashes: list[str]
 
 
 def unit_hash(language: str, source: str) -> str:
@@ -102,28 +93,23 @@ class Analyser:
         assert set(result.probabilities) == set(rules), "Every rule must have an answer"
         return result
 
-    def parse(self, text: str, language: str, path: Path) -> Parsed | None:
+    async def analyse(self, text: str, language: str, path: Path) -> list[Finding]:
         assert language in self.config.languages, "Language must be configured"
         rules = self.config.rules_for(language, path)
         if not rules:
-            return None
+            return []
         units = extract_units(text, self.config.languages[language], self.config.is_test(path))
         hashes = [unit_hash(language, unit.source) for unit in units]
         assert len(hashes) == len(units), "Every unit must have a hash"
         self.store.save_units(language, list(zip(hashes, (unit.source for unit in units))))
-        return Parsed(path, language, rules, units, hashes)
-
-    async def score(self, parsed: Parsed) -> list[Finding]:
-        results = await asyncio.gather(
-            *(self.ask(parsed.language, unit.source, parsed.rules) for unit in parsed.units)
-        )
-        assert len(results) == len(parsed.units), "Every unit must have an ask result"
-        labels = self.store.labels(parsed.hashes)
+        results = await asyncio.gather(*(self.ask(language, unit.source, rules) for unit in units))
+        assert len(results) == len(units), "Every unit must have an ask result"
+        labels = self.store.labels(hashes)
         observations: list[Observation] = []
         findings: list[Finding] = []
-        for unit, uhash, result in zip(parsed.units, parsed.hashes, results):
+        for unit, uhash, result in zip(units, hashes, results):
             for name, probability in result.probabilities.items():
-                rule = parsed.rules[name]
+                rule = rules[name]
                 threshold = self.threshold(rule)
                 fired = probability >= threshold and labels.get((name, uhash)) is not False
                 observations.append(
@@ -142,10 +128,8 @@ class Analyser:
                     findings.append(
                         Finding(name, rule.message, rule.severity, probability, unit.span, uhash)
                     )
-        self.record(parsed.path, parsed.language, observations, results)
-        assert len(observations) == len(parsed.units) * len(parsed.rules), (
-            "Every rule must be observed per unit"
-        )
+        self.record(path, language, observations, results)
+        assert len(observations) == len(units) * len(rules), "Every rule must be observed per unit"
         return findings
 
     def record(

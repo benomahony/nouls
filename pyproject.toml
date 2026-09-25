@@ -16,7 +16,7 @@ dependencies = [
     "pygls>=2.1.1",
     "pyyaml>=6.0.3",
     "rich>=15.0.0",
-    "tree-sitter>=0.25.2,<0.26",  # 0.26.0 corrupts the Python heap (segfaults in GC/sort)
+    "tree-sitter>=0.25.2,<0.26",  # 0.26.0 Point refcount bug: py-tree-sitter#472, fixed by #466
     "tree-sitter-language-pack>=1.20.0",
     "typesafe-sdk>=0.6.0",
 ]

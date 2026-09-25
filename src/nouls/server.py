@@ -69,8 +69,7 @@ async def lint(ls: NoulsServer, uri: str) -> None:
     if language is None:
         return
     try:
-        parsed = analyser.parse(document.source, language, path)
-        findings = [] if parsed is None else await analyser.score(parsed)
+        findings = await analyser.analyse(document.source, language, path)
     except Exception:
         logger.exception("nouls analysis failed for %s", uri)
         return

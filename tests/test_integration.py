@@ -66,7 +66,7 @@ def test_language_server_handshake_over_stdio(tmp_path: Path) -> None:
 
 
 def test_extracting_units_repeatedly_does_not_corrupt_the_heap() -> None:
-    # tree-sitter 0.26.0 corrupted the Python heap, segfaulting later in GC or sort.
+    # tree-sitter 0.26.0 over-decrefs Point.row/column (py-tree-sitter#472), corrupting the heap.
     script = (
         "import gc, glob, rich\n"
         "from pathlib import Path\n"
