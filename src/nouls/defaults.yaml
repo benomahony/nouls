@@ -42,12 +42,9 @@ test_files: &test_files
 languages:
   python:
     grammar: python
-    extensions: [.py]
-    units: [function_definition]
     attached: [decorated_definition]
   javascript:
     grammar: javascript
-    extensions: [.js, .jsx, .mjs, .cjs]
     units: [function_declaration, method_definition]
     calls:
       node: call_expression
@@ -55,7 +52,6 @@ languages:
       names: [it, test, beforeEach, afterEach, beforeAll, afterAll]
   typescript:
     grammar: typescript
-    extensions: [.ts, .mts, .cts]
     units: [function_declaration, method_definition]
     attached: [decorator]
     calls:
@@ -64,46 +60,29 @@ languages:
       names: [it, test, beforeEach, afterEach, beforeAll, afterAll]
   tsx:
     grammar: tsx
-    extensions: [.tsx]
     units: [function_declaration, method_definition]
     attached: [decorator]
     calls:
       node: call_expression
       callee: function
       names: [it, test, beforeEach, afterEach, beforeAll, afterAll]
-  go:
-    grammar: go
-    extensions: [.go]
-    units: [function_declaration, method_declaration]
   rust:
     grammar: rust
-    extensions: [.rs]
-    units: [function_item]
     attached: [attribute_item]
-  java:
-    grammar: java
-    extensions: [.java]
-    units: [method_declaration, constructor_declaration]
   c:
     grammar: c
-    extensions: [.c, .h]
     units: [function_definition]
   cpp:
     grammar: cpp
-    extensions: [.cpp, .cc, .cxx, .hpp]
     units: [function_definition]
   lua:
     grammar: lua
-    extensions: [.lua]
-    units: [function_declaration]
     calls:
       node: function_call
       callee: name
       names: [it, test, before_each, after_each, setup, teardown, lazy_setup, lazy_teardown]
   ruby:
     grammar: ruby
-    extensions: [.rb]
-    units: [method, singleton_method]
     calls:
       node: call
       callee: method

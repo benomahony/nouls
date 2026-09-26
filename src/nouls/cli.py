@@ -75,7 +75,7 @@ def discover(paths: list[Path], config: Config) -> Iterator[tuple[Path, str]]:
             if path.is_dir() and config.excluded(relative):
                 continue
             if language := config.language_for(candidate):
-                assert language in config.languages, "Discovered language must be configured"
+                assert config.language(language), "A discovered language must be parseable"
                 yield candidate, language
 
 
@@ -311,7 +311,7 @@ def label(
         u
         for u in extract_units(
             path.read_text(encoding="utf-8"),
-            loaded.languages[language],
+            loaded.language(language),
             tests=loaded.is_test(path),
         )
         if u.contains(line - 1)

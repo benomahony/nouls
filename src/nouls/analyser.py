@@ -226,13 +226,11 @@ class Analyser:
             The findings for rules that fired and were not labelled false.
 
         """
-        assert language in self.config.languages, "Language must be configured"
+        assert language, "analyse needs a language name; get one from Config.language_for(path)"
         rules = self.config.rules_for(language, path)
         if not rules:
             return []
-        units = extract_units(
-            text, self.config.languages[language], tests=self.config.is_test(path)
-        )
+        units = extract_units(text, self.config.language(language), tests=self.config.is_test(path))
         hashes = [unit_hash(language, unit.source) for unit in units]
         assert len(hashes) == len(units), "Every unit must have a hash"
         self.store.save_units(

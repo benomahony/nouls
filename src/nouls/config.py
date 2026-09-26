@@ -10,7 +10,11 @@ from typing import Literal, cast
 
 import yaml
 from pydantic import BaseModel, model_validator
-from tree_sitter_language_pack import SupportedLanguage
+from tree_sitter_language_pack import (
+    SupportedLanguage,
+    detect_language_from_path,
+    get_tags_query,
+)
 
 from nouls.store import default_path
 
@@ -19,6 +23,7 @@ CONFIG_NAMES = ("nouls.yaml", "nouls.yml", ".nouls.yaml", ".nouls.yml")
 Severity = Literal["error", "warning", "info", "hint"]
 Scope = Literal["function", "project"]
 type Tree = dict[str, object]
+TAG_KINDS = ("definition.function", "definition.method")
 
 
 class Calls(BaseModel):
@@ -30,11 +35,16 @@ class Calls(BaseModel):
 
 
 class Language(BaseModel):
-    """How to parse a language and which nodes are functions."""
+    """How to parse a language and which nodes are functions.
+
+    Languages are detected from file names, so only settings that differ from the defaults need
+    configuring. ``extensions`` adds file endings detection does not know. ``units`` lists the
+    node types that are functions; when empty, the grammar's tags query finds them.
+    """
 
     grammar: SupportedLanguage
-    extensions: list[str]
-    units: list[str]
+    extensions: list[str] = []
+    units: list[str] = []
     attached: list[str] = []
     calls: Calls | None = None
 
@@ -120,15 +130,39 @@ class Config(BaseModel):
             path: The file to look up.
 
         Returns:
-            The language whose extensions include the file's, or None.
+            A configured language whose extensions include the file's, otherwise the language
+            detected from the file name when nouls can find functions in it, or None.
 
         """
-        assert path.name, "Path must name a file"
-        assert self.languages, "At least one language must be configured"
-        return next(
+        assert path.name, f"language_for needs a file path but got {path!r}; pass a file"
+        configured = next(
             (name for name, lang in self.languages.items() if path.suffix in lang.extensions),
             None,
         )
+        found = configured or detected_language(path)
+        assert found is None or found in self.languages or has_function_tags(found), (
+            f"{path} was matched to {found}, which nouls cannot find functions in; "
+            "language_for must only return languages with units or function tags"
+        )
+        return found
+
+    def language(self, name: str) -> Language:
+        """Find how to parse a language.
+
+        Args:
+            name: A language from language_for.
+
+        Returns:
+            The configured settings, or defaults that find functions with the tags query.
+
+        """
+        assert name, "language needs a language name; get one from language_for(path)"
+        found = self.languages.get(name) or Language.model_validate({"grammar": name})
+        assert found.units or has_function_tags(found.grammar), (
+            f"nouls cannot find functions in {name}: it has no units and no function tags; "
+            f"add units under languages.{name} in your nouls config"
+        )
+        return found
 
     def is_test(self, path: Path) -> bool:
         """Tell whether a file is a test file.
@@ -158,10 +192,7 @@ class Config(BaseModel):
             The enabled function rules for this language and file, by name.
 
         """
-        assert language in self.languages, (
-            f"No language called {language!r} is configured; get the name from language_for(path) "
-            f"or add {language} under languages in your nouls config"
-        )
+        assert language, "rules_for needs a language name; get one from language_for(path)"
         selected = {
             name: rule
             for name, rule in self.rules.items()
@@ -223,11 +254,12 @@ class Config(BaseModel):
         """
         assert path.name, f"unsupported needs a file path but got {path!r}; pass the file to label"
         assert self.language_for(path) is None, "Only a file with no language is unsupported"
-        extensions = sorted({ext for lang in self.languages.values() for ext in lang.extensions})
         return (
-            f"nouls: {path} has no configured language, so it has no functions to lint. "
-            f"Choose a file ending in {', '.join(extensions)}, "
-            f"or add {path.suffix or 'its extension'} to a language in your nouls config."
+            f"nouls: nouls cannot find functions in {path}, because its file type has no "
+            "tree-sitter grammar with function tags. Choose a source file, or add "
+            f"{path.suffix or 'its extension'} with the node types of its functions under "
+            "languages in your nouls config, such as languages: {name: {grammar: name, "
+            "extensions: [.ext], units: [function_definition]}}."
         )
 
     def excluded(self, path: Path) -> bool:
@@ -243,6 +275,40 @@ class Config(BaseModel):
         assert not path.is_absolute(), "Exclusion applies to paths relative to the search root"
         assert all(self.exclude), "Exclude patterns must not be empty"
         return any(fnmatch(part, pattern) for part in path.parts for pattern in self.exclude)
+
+
+def has_function_tags(grammar: str) -> bool:
+    """Tell whether a grammar's tags query marks functions or methods.
+
+    Args:
+        grammar: A tree-sitter-language-pack name.
+
+    Returns:
+        True when the tags query has a function or method definition capture.
+
+    """
+    assert grammar, "has_function_tags needs a grammar name, such as python"
+    query = get_tags_query(grammar) or ""
+    found = any(f"@{kind}" in query for kind in TAG_KINDS)
+    assert found or "@definition.function" not in query, "TAG_KINDS must include functions"
+    return found
+
+
+def detected_language(path: Path) -> str | None:
+    """Detect a file's language from its name, when nouls can find functions in it.
+
+    Args:
+        path: The file.
+
+    Returns:
+        The tree-sitter-language-pack name, or None for unknown files and data formats.
+
+    """
+    assert path.name, f"detected_language needs a file path but got {path!r}"
+    name = detect_language_from_path(str(path))
+    found = name if name and has_function_tags(name) else None
+    assert found is None or found == name, "detected_language must not rename languages"
+    return found
 
 
 def matches(path: Path, patterns: list[str]) -> bool:

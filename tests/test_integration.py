@@ -120,7 +120,7 @@ def test_extracting_units_repeatedly_does_not_corrupt_the_heap() -> None:
         "from nouls.config import load_config\n"
         "from nouls.units import extract_units\n"
         "gc.set_threshold(10)\n"
-        "language = load_config(Path.cwd()).languages['python']\n"
+        "language = load_config(Path.cwd()).language('python')\n"
         "sources = [Path(f).read_text() for f in glob.glob(rich.__path__[0] + '/*.py')]\n"
         "for _ in range(20):\n"
         "    for source in sources:\n"

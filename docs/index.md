@@ -117,8 +117,7 @@ exclude: [".*", node_modules, __pycache__, target, dist, build, venv]
 languages:
   kotlin:
     grammar: kotlin
-    extensions: [.kt, .kts]
-    units: [function_declaration]
+    attached: [annotation]
 
 rules:
   mixed_abstraction:
@@ -140,7 +139,7 @@ rules:
 
 `scope: project` asks a rule once about the whole project instead of once per function. Its `files` are globs relative to the project root, the nearest directory above the target with a `.git` or nouls config, and they are read even when `exclude` would skip them. Every matching file is sent together, and the finding sits on line 1 of the first match in the order the globs are listed. The language server checks project rules when you open or save one of their files.
 
-Languages are pure configuration. `grammar` is any name from [tree-sitter-language-pack](https://github.com/Goldziher/tree-sitter-language-pack), and `units` lists the node types to send as individual questions. The diagnostic sits on the node's `name` field, or its first line when it has none.
+nouls detects each file's language from its name, using [tree-sitter-language-pack](https://github.com/Goldziher/tree-sitter-language-pack), and finds functions with the grammar's tags query, so any language whose grammar marks functions works without configuration. Files in languages without function tags, such as Markdown, YAML and plain text, are skipped. A `languages` entry only adds what detection cannot know: `extensions` maps extra file endings to the language, and `units` lists the node types to send as individual questions, replacing the tags query where it misses functions, as it does for C, C++, JavaScript and TypeScript. The diagnostic sits on the node's `name` field, or its first line when it has none.
 
 Every question is answered against this state:
 

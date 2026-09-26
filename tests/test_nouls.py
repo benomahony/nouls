@@ -93,13 +93,19 @@ async def test_project_yaml_disables_and_scopes_rules(tmp_path: Path) -> None:
         ("lua", "local function f() end\nfunction M.g() end\n", 2),
         ("cpp", "int f(int x) {\n  return x;\n}\n", 1),
         ("ruby", "class A\n  def a; end\n  def self.b; end\nend\n", 2),
+        ("java", "class A { A() {} void m() {} }\n", 2),
+        ("kotlin", "class C {\n  fun m(): Int { return 1 }\n}\nfun f() = 2\n", 2),
+        ("php", "<?php\nfunction f() { return 1; }\nclass C { public function m() {} }\n", 2),
+        ("csharp", "class C { void M() {} }\n", 1),
+        ("scala", "object O { def f(x: Int): Int = x }\n", 1),
+        ("swift", "func f() -> Int { 1 }\nclass C { func m() {} }\n", 2),
     ],
 )
-def test_units_are_found_from_yaml_node_types(
+def test_units_are_found_in_each_language(
     config: Config, language: str, source: str, expected: int
 ) -> None:
-    """Units are found from yaml node types."""
-    units = extract_units(source, config.languages[language])
+    """Units are found in configured languages and, from tags queries, in any other."""
+    units = extract_units(source, config.language(language))
     assert len(units) == expected
     assert all(unit.span.end_column > unit.span.column for unit in units)
 
@@ -139,7 +145,7 @@ def test_fixtures_and_hooks_are_units_with_their_decorators(
 ) -> None:
     """Fixtures and hooks are units with their decorators."""
     assert config.is_test(Path(path))
-    units = extract_units(source, config.languages[language], tests=config.is_test(Path(path)))
+    units = extract_units(source, config.language(language), tests=config.is_test(Path(path)))
     assert [unit.source for unit in units] == expected
 
 
@@ -147,13 +153,13 @@ def test_test_calls_are_not_units_outside_test_files(config: Config) -> None:
     """Test calls are not units outside test files."""
     source = "beforeEach(() => {});\nit('adds', () => {});\n"
     assert not config.is_test(Path("web/cart.ts"))
-    assert extract_units(source, config.languages["typescript"]) == []
+    assert extract_units(source, config.language("typescript")) == []
 
 
 def test_a_decorated_function_is_labelled_by_line_from_its_decorator(config: Config) -> None:
     """A decorated function is labelled by line from its decorator."""
     source = "@pytest.fixture\ndef db():\n    yield 1\n"
-    [unit] = extract_units(source, config.languages["python"])
+    [unit] = extract_units(source, config.language("python"))
     assert (unit.first_line, unit.span.line) == (0, 1)
     assert unit.contains(0)
 
@@ -249,3 +255,31 @@ def test_label_command_targets_the_innermost_function(tmp_path: Path) -> None:
     assert store.query(tuple[str, str, int], "SELECT rule, unit_hash, real FROM labels") == [
         ("unit_mismatch", expected, 0)
     ]
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("src/app.py", "python"),
+        ("web/cart.tsx", "tsx"),
+        ("lib/a.h", "c"),
+        ("App.kt", "kotlin"),
+        ("lib/index.php", "php"),
+        ("notes.txt", None),
+        ("config.yaml", None),
+        ("README.md", None),
+    ],
+)
+def test_languages_are_detected_from_file_names(
+    config: Config, path: str, expected: str | None
+) -> None:
+    """Languages are detected from file names, skipping files nouls cannot find functions in."""
+    assert config.language_for(Path(path)) == expected
+
+
+def test_configured_extensions_override_detection(tmp_path: Path) -> None:
+    """Configured extensions override detection."""
+    _ = (tmp_path / "nouls.yaml").write_text(
+        "languages:\n  python:\n    grammar: python\n    extensions: [.pyx]\n", encoding="utf-8"
+    )
+    assert load_config(tmp_path).language_for(Path("fast.pyx")) == "python"

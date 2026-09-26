@@ -6,10 +6,13 @@ import re
 from dataclasses import dataclass
 from functools import cache
 
-from tree_sitter import Node, Parser
+from tree_sitter import Node, Parser, Query, QueryCursor
+from tree_sitter_language_pack import get_language, get_tags_query
 from tree_sitter_language_pack import get_parser as _get_parser
 
-from nouls.config import Language
+from nouls.config import TAG_KINDS, Language, has_function_tags
+
+type NodeKey = tuple[int, int, str]
 
 
 @cache
@@ -33,6 +36,72 @@ def get_parser(grammar: str) -> Parser:
         "check the name against its supported languages or upgrade the package"
     )
     return parser
+
+
+@cache
+def function_tags(grammar: str) -> Query:
+    """Compile the grammar's tags query, which marks functions and methods.
+
+    Args:
+        grammar: A tree-sitter-language-pack name with function tags.
+
+    Returns:
+        A cached query.
+
+    """
+    assert has_function_tags(grammar), (
+        f"{grammar} has no function tags; configure units for it under languages instead"
+    )
+    query = Query(get_language(grammar), get_tags_query(grammar) or "")
+    assert query.pattern_count, f"The tags query for {grammar} compiled to no patterns"
+    return query
+
+
+def node_key(node: Node) -> NodeKey:
+    """Identify a node by its position and type.
+
+    Args:
+        node: A syntax tree node.
+
+    Returns:
+        The node's start byte, end byte and type.
+
+    """
+    key = (node.start_byte, node.end_byte, node.type)
+    assert key[0] <= key[1], "A node must not end before it starts"
+    assert key[2], "A node must have a type"
+    return key
+
+
+def tagged_functions(root: Node, grammar: str) -> set[NodeKey]:
+    """Find the functions and methods a grammar's tags query marks.
+
+    Some queries mark a whole class for each method in it. A marked node that contains a marked
+    node of another type is dropped, so only the functions themselves remain.
+
+    Args:
+        root: The file's syntax tree.
+        grammar: A tree-sitter-language-pack name with function tags.
+
+    Returns:
+        The marked function and method nodes.
+
+    """
+    captures = QueryCursor(function_tags(grammar)).captures(root)
+    nodes = [node for kind in TAG_KINDS for node in captures.get(kind, [])]
+    kept = {
+        node_key(node)
+        for node in nodes
+        if not any(
+            other.type != node.type
+            and node.start_byte <= other.start_byte
+            and other.end_byte <= node.end_byte
+            for other in nodes
+        )
+    }
+    assert len(kept) <= len(nodes), "Filtering must not add nodes"
+    assert all(key[1] <= root.end_byte for key in kept), "Tagged nodes must lie in the file"
+    return kept
 
 
 @dataclass(frozen=True)
@@ -156,6 +225,35 @@ def callee(node: Node, language: Language) -> str | None:
     return match.group() if match else None
 
 
+def unit_at(node: Node, data: bytes, attached: set[str]) -> Unit:
+    """Build the unit for a function node, with the decorators that belong to it.
+
+    Args:
+        node: A function, method or test call node.
+        data: The file's bytes.
+        attached: Node types that belong to the unit they wrap or precede.
+
+    Returns:
+        The unit, named by the node's name or its first line.
+
+    """
+    text = (node.text or b"").decode()
+    assert text, f"unit_at needs a node with text, but the {node.type} node is empty"
+    first = attached_start(node, attached)
+    name = node.child_by_field_name("name")
+    label = name.text.decode() if name is not None and name.text else text.split("\n", 1)[0].strip()
+    unit = Unit(
+        node.type,
+        label,
+        data[first.start_byte : node.end_byte].decode(),
+        headline(node, text),
+        first.start_point.row,
+        node.end_point.row,
+    )
+    assert unit.first_line <= unit.last_line, "A unit must not end before it starts"
+    return unit
+
+
 def extract_units(text: str, language: Language, *, tests: bool = False) -> list[Unit]:
     """Split a file into units.
 
@@ -168,7 +266,9 @@ def extract_units(text: str, language: Language, *, tests: bool = False) -> list
         Every unit, in order of where its diagnostic sits.
 
     """
-    assert language.units, "Language must declare unit node types"
+    assert language.units or has_function_tags(language.grammar), (
+        f"nouls cannot find functions in {language.grammar}; configure units for it"
+    )
     kinds = set(language.units)
     attached = set(language.attached)
     calls = language.calls if tests else None
@@ -176,31 +276,16 @@ def extract_units(text: str, language: Language, *, tests: bool = False) -> list
     units: list[Unit] = []
     tree = get_parser(language.grammar).parse(data)
     root = tree.root_node
+    tagged: set[NodeKey] = set() if kinds else tagged_functions(root, language.grammar)
     stack = [root]
     while stack:
         node = stack.pop()
         is_call = (
             calls is not None and node.type == calls.node and callee(node, language) in calls.names
         )
-        if (node.type in kinds or is_call) and node.text:
-            first = attached_start(node, attached)
-            source = data[first.start_byte : node.end_byte].decode()
-            name = node.child_by_field_name("name")
-            label = (
-                name.text.decode()
-                if name is not None and name.text
-                else node.text.decode().split("\n", 1)[0].strip()
-            )
-            units.append(
-                Unit(
-                    node.type,
-                    label,
-                    source,
-                    headline(node, node.text.decode()),
-                    first.start_point.row,
-                    node.end_point.row,
-                )
-            )
+        is_unit = node.type in kinds or node_key(node) in tagged
+        if (is_unit or is_call) and node.text:
+            units.append(unit_at(node, data, attached))
             if is_call:
                 continue
         stack.extend(node.children)

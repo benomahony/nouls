@@ -178,8 +178,8 @@ def test_label_rejects_unknown_rules_and_lines(
     assert "there is no rule called made_up" in err
     assert "line 1 of" in err
     assert "outside every function" in err
-    assert "notes.txt has no configured language" in err
-    assert ".py" in err
+    assert "nouls cannot find functions in" in err
+    assert "notes.txt" in err
     assert "gone.py because it does not exist" in err
 
 
