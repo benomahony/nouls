@@ -1,5 +1,8 @@
+# Copyright 2026 Ben O'Mahony
+# SPDX-License-Identifier: MIT
+"""Statistics over the answer store: rule spread, hotspots, cost and thresholds."""
+
 import asyncio
-import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Annotated
@@ -11,6 +14,7 @@ from typesafe_sdk import AsyncTypeSafeClient
 
 from nouls.analyser import Analyser, question_hash
 from nouls.config import Config, load_config
+from nouls.output import fail
 from nouls.store import Store
 
 stats = App(name="stats", help="Analyse stored answers, findings and labels.")
@@ -24,8 +28,10 @@ Positive = Annotated[int, Parameter(validator=validators.Number(gt=0))]
 Price = Annotated[float, Parameter(validator=validators.Number(gte=0))]
 
 BARS = " ▁▂▃▄▅▆▇█"
+BUCKETS = 10
 THRESHOLDS = [0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95]
 
+SampleRow = tuple[str, str, str, str, str, int, float]
 SAMPLE = """
 WITH candidates AS (
     SELECT o.unit_hash, u.language, u.source, o.unit_name, o.path, o.line, o.probability,
@@ -47,6 +53,15 @@ FROM banded ORDER BY turn, probability DESC LIMIT ?
 
 
 def open_store(config: Path | None) -> tuple[Config, Store]:
+    """Load the configuration and open its store.
+
+    Args:
+        config: A config file to use instead of searching from the current directory.
+
+    Returns:
+        The configuration and its store.
+
+    """
     loaded = load_config(Path.cwd(), config)
     assert loaded.rules, "Config must define rules"
     store = Store(loaded.store_path())
@@ -55,6 +70,15 @@ def open_store(config: Path | None) -> tuple[Config, Store]:
 
 
 def sparkline(counts: list[int]) -> str:
+    """Draw counts as a row of block characters.
+
+    Args:
+        counts: One count per bucket.
+
+    Returns:
+        One character per bucket, taller for larger counts.
+
+    """
     assert counts, "Sparkline needs at least one bucket"
     peak = max(counts) or 1
     line = "".join(BARS[round(c / peak * (len(BARS) - 1))] for c in counts)
@@ -63,9 +87,19 @@ def sparkline(counts: list[int]) -> str:
 
 
 def display(path: str) -> str:
+    """Show a path relative to the current directory when it is inside it.
+
+    Args:
+        path: An absolute or relative path.
+
+    Returns:
+        The shortest readable form of the path.
+
+    """
     assert path, "Path must not be empty"
     candidate = Path(path)
-    shown = str(candidate.relative_to(Path.cwd())) if candidate.is_relative_to(Path.cwd()) else path
+    inside = candidate.is_relative_to(Path.cwd()) and candidate != Path.cwd()
+    shown = str(candidate.relative_to(Path.cwd())) if inside else path
     assert shown.endswith(candidate.name), "Displayed path must keep the file name"
     return shown
 
@@ -74,26 +108,28 @@ def display(path: str) -> str:
 def rules(*, config: ConfigOption = None) -> None:
     """Spread of probabilities, fire rate and ambiguity for every rule."""
     _, store = open_store(config)
-    buckets: dict[str, list[int]] = defaultdict(lambda: [0] * 10)
+    buckets: dict[str, list[int]] = defaultdict(lambda: [0] * BUCKETS)
     for rule, bucket, count in store.query(
+        tuple[str, int, int],
         """
         SELECT rule, MIN(CAST(probability * 10 AS INTEGER), 9), COUNT(*)
         FROM observations GROUP BY 1, 2
-        """
+        """,
     ):
         buckets[rule][bucket] = count
-    assert all(len(counts) == 10 for counts in buckets.values()), (
+    assert all(len(counts) == BUCKETS for counts in buckets.values()), (
         "A rule has a probability histogram without exactly 10 buckets; "
         "the bucket expression in the query must clamp to 0..9"
     )
     table = Table("rule", "functions", "fires", "ambiguous", "mean", "0 ▸ 1", "labels")
     for rule, n, fires, ambiguous, mean, labels in store.query(
+        tuple[str, int, float, float, float, int],
         """
         SELECT o.rule, COUNT(*), AVG(o.probability >= o.threshold),
                AVG(o.probability BETWEEN 0.35 AND 0.65), AVG(o.probability),
                (SELECT COUNT(*) FROM labels l WHERE l.rule = o.rule)
         FROM observations o GROUP BY o.rule ORDER BY 3 DESC
-        """
+        """,
     ):
         table.add_row(
             rule,
@@ -118,6 +154,7 @@ def hotspots(*, limit: Positive = 20, config: ConfigOption = None) -> None:
     _, store = open_store(config)
     files = Table("file", "findings", "functions")
     for path, fired, functions in store.query(
+        tuple[str, int, int],
         """
         SELECT path, SUM(fired), COUNT(DISTINCT unit_hash) FROM observations
         GROUP BY path HAVING SUM(fired) > 0 ORDER BY 2 DESC LIMIT ?
@@ -128,6 +165,7 @@ def hotspots(*, limit: Positive = 20, config: ConfigOption = None) -> None:
     console.print(files)
     functions = Table("function", "location", "rules")
     for name, path, line, found in store.query(
+        tuple[str, str, int, str],
         """
         SELECT unit_name, path, line, GROUP_CONCAT(rule, ', ') FROM observations WHERE fired
         GROUP BY path, unit_hash, line ORDER BY COUNT(*) DESC LIMIT ?
@@ -152,6 +190,7 @@ def cost(
     _, store = open_store(config)
     table = Table("day", "runs", "asked", "cached", "hit rate", "input tokens", "cost")
     for day, runs, asked, cached, tokens in store.query(
+        tuple[str, int, int, int, int],
         """
         SELECT SUBSTR(at, 1, 10), COUNT(*), SUM(asked), SUM(cached), SUM(input_tokens) FROM runs
         GROUP BY 1 ORDER BY 1 DESC LIMIT ?
@@ -174,6 +213,16 @@ def cost(
 def score(
     pairs: list[tuple[float, bool]], threshold: float
 ) -> tuple[int, float | None, float | None]:
+    """Measure precision and recall of labelled answers at a threshold.
+
+    Args:
+        pairs: Each labelled probability and whether the label said real.
+        threshold: The probability at which the rule fires.
+
+    Returns:
+        How many fire, and the precision and recall, or None when undefined.
+
+    """
     assert 0.0 <= threshold <= 1.0, "Threshold must be in [0, 1]"
     tp = sum(1 for p, real in pairs if real and p >= threshold)
     fp = sum(1 for p, real in pairs if not real and p >= threshold)
@@ -185,6 +234,15 @@ def score(
 
 
 def percent(value: float | None) -> str:
+    """Format a ratio as a whole percentage.
+
+    Args:
+        value: A ratio from 0 to 1, or None.
+
+    Returns:
+        The percentage, or ``n/a`` for None.
+
+    """
     if value is None:
         return "n/a"
     assert 0.0 <= value <= 1.0, "Ratio must be in [0, 1]"
@@ -194,11 +252,19 @@ def percent(value: float | None) -> str:
 
 
 async def ask_missing(loaded: Config, store: Store, missing: list[tuple[str, str, str]]) -> None:
+    """Ask the current wording of rules about labelled units with no answer.
+
+    Args:
+        loaded: The loaded configuration.
+        store: The store to cache answers in.
+        missing: Each rule with the language and source of an unanswered unit.
+
+    """
     assert missing, "There must be something to ask"
     assert all(item[0] in loaded.rules for item in missing), "Every rule must be configured"
     async with AsyncTypeSafeClient() as client:
         analyser = Analyser(loaded, client, store)
-        await asyncio.gather(
+        _ = await asyncio.gather(
             *(
                 analyser.ask(language, source, {rule: loaded.rules[rule]})
                 for rule, language, source in missing
@@ -207,6 +273,17 @@ async def ask_missing(loaded: Config, store: Store, missing: list[tuple[str, str
 
 
 def labelled(loaded: Config, store: Store, name: str) -> list[tuple[bool, float | None, str, str]]:
+    """Collect a rule's labels with the current wording's answers.
+
+    Args:
+        loaded: The loaded configuration.
+        store: The store holding labels and answers.
+        name: The rule.
+
+    Returns:
+        Each label's verdict, probability or None, language and source.
+
+    """
     assert name in loaded.rules, (
         f"labelled was asked about {name}, which is not a configured rule; "
         "reject unknown rules with Config.unknown_rule before calling it"
@@ -214,6 +291,7 @@ def labelled(loaded: Config, store: Store, name: str) -> list[tuple[bool, float 
     rows = [
         (bool(real), p, language, source)
         for real, p, language, source in store.query(
+            tuple[int, float | None, str, str],
             """
             SELECT l.real, a.probability, u.language, u.source FROM labels l
             JOIN units u USING (unit_hash)
@@ -233,6 +311,17 @@ def labelled(loaded: Config, store: Store, name: str) -> list[tuple[bool, float 
 def threshold_table(
     name: str, rows: list[tuple[bool, float | None, str, str]], active: float
 ) -> Table:
+    """Tabulate precision and recall at each threshold for one rule.
+
+    Args:
+        name: The rule.
+        rows: The rule's labelled answers.
+        active: The rule's current threshold, marked in the table.
+
+    Returns:
+        A table with one row per threshold.
+
+    """
     assert rows, "A table needs labelled rows"
     pairs = [(p, real) for real, p, _, _ in rows if p is not None]
     unanswered = len(rows) - len(pairs)
@@ -253,17 +342,18 @@ def threshold_table(
 def thresholds(rule: str | None = None, *, ask: bool = False, config: ConfigOption = None) -> int:
     """Precision and recall at each threshold, from your labels and the current question wording.
 
-    Parameters
-    ----------
-    rule
-        Only show this rule.
-    ask
-        Ask the current question for labelled functions that have no answer yet.
+    Args:
+        rule: Only show this rule.
+        ask: Ask the current question for labelled functions that have no answer yet.
+        config: Path to a nouls.yaml file.
+
+    Returns:
+        0, or 2 when the rule does not exist.
+
     """
     loaded, store = open_store(config)
     if rule is not None and rule not in loaded.rules:
-        print(loaded.unknown_rule(rule), file=sys.stderr)
-        return 2
+        return fail(loaded.unknown_rule(rule))
     names = [rule] if rule else [name for name, r in loaded.rules.items() if r.enabled]
     assert all(name in loaded.rules for name in names), "Every rule must be configured"
     if ask:

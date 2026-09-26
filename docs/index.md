@@ -25,6 +25,15 @@ The default rules target intent, not syntax:
 
 Anything ruff, a type checker or a security scanner already catches is deliberately out of scope.
 
+Two project rules read the project's build, lint and CI configuration as a whole, and check that it follows rule 10 of NASA's [Power of Ten](https://spinroot.com/gerard/pdf/P10.pdf): all code compiles with every warning enabled at the most pedantic setting and no warnings, and at least one strong static analyser checks it at least daily with zero warnings.
+
+| Rule | Severity |
+| --- | --- |
+| `relaxed_warnings` | warning |
+| `unscheduled_static_analysis` | warning |
+
+They read files such as `pyproject.toml`, `ruff.toml`, `tsconfig.json`, `Cargo.toml`, `go.mod`, `CMakeLists.txt`, `Makefile`, `.pre-commit-config.yaml` and `.github/workflows/*.yml`, and report on the first one they find, or on the project root when there are none.
+
 Test files also get rules drawn from Kent Beck's [Test Desiderata](https://testdesiderata.com). Each asks whether a test violates one property.
 
 | Rule | Desideratum | Severity |
@@ -129,6 +138,8 @@ rules:
 
 `files` limits a rule to file names or paths matching any of its globs. Setting it replaces the default list.
 
+`scope: project` asks a rule once about the whole project instead of once per function. Its `files` are globs relative to the project root, the nearest directory above the target with a `.git` or nouls config, and they are read even when `exclude` would skip them. Every matching file is sent together, and the finding sits on line 1 of the first match in the order the globs are listed. The language server checks project rules when you open or save one of their files.
+
 Languages are pure configuration. `grammar` is any name from [tree-sitter-language-pack](https://github.com/Goldziher/tree-sitter-language-pack), and `units` lists the node types to send as individual questions. The diagnostic sits on the node's `name` field, or its first line when it has none.
 
 Every question is answered against this state:
@@ -138,6 +149,12 @@ Every question is answered against this state:
 ```
 
 Write questions as a single yes/no judgement about that function.
+
+Project rules are answered against the matching files, keyed by path relative to the project root:
+
+```json
+{"files": {"pyproject.toml": "<contents>", ".github/workflows/ci.yml": "<contents>"}}
+```
 
 Write each `message` in plain language, say precisely what is wrong, then suggest how to fix it. The reader may be a user, a developer or an agent, so name the exact command, setting or code to change.
 

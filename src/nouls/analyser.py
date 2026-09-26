@@ -1,16 +1,26 @@
+# Copyright 2026 Ben O'Mahony
+# SPDX-License-Identifier: MIT
+"""Ask each rule's question about functions and projects, and turn answers into findings."""
+
 import asyncio
+import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 from typesafe_sdk import AsyncTypeSafeClient, Noul
 
-from nouls.config import Config, Rule, Severity
-from nouls.store import Observation, Store, digest
+from nouls.config import Config, Rule, Severity, project_files
+from nouls.store import DIGEST_LENGTH, Observation, RunStats, Store, digest
 from nouls.units import Span, extract_units
+
+PROJECT = "project"
 
 
 @dataclass(frozen=True)
 class Finding:
+    """A rule that fired on a function or project."""
+
     rule: str
     message: str
     severity: Severity
@@ -18,7 +28,16 @@ class Finding:
     span: Span
     unit_hash: str
 
-    def describe(self, show_probability: bool) -> str:
+    def describe(self, *, show_probability: bool) -> str:
+        """Say what the finding means, optionally with its probability.
+
+        Args:
+            show_probability: Whether to append the model's probability.
+
+        Returns:
+            The rule's message, followed by the probability when asked for.
+
+        """
         assert self.message, "Finding must have a message"
         text = (
             f"{self.message} (Probability: {self.probability:.0%})"
@@ -31,6 +50,8 @@ class Finding:
 
 @dataclass
 class Asked:
+    """The answers for one unit, and what asking for them cost."""
+
     probabilities: dict[str, float]
     asked: int = 0
     input_tokens: int = 0
@@ -38,20 +59,100 @@ class Asked:
 
 
 def unit_hash(language: str, source: str) -> str:
+    """Identify a unit by its language and source.
+
+    Args:
+        language: The unit's language, or ``project`` for project rules.
+        source: The unit's source text.
+
+    Returns:
+        A digest that changes whenever the language or source does.
+
+    """
     assert language, "Language must not be empty"
     assert source, "Source must not be empty"
     return digest(language, source)
 
 
+def project_source(root: Path, patterns: list[str]) -> tuple[list[Path], str]:
+    """Collect the files a project rule reads into one source text.
+
+    Args:
+        root: The project root that the globs are relative to.
+        patterns: The rule's file globs.
+
+    Returns:
+        The matched paths in pattern order, and their contents as JSON keyed by relative path.
+
+    """
+    assert patterns, (
+        "project_source needs the rule's file globs; pass rule.files, not an empty list"
+    )
+    paths = project_files(root, patterns)
+    contents = {
+        path.relative_to(root).as_posix(): path.read_text(errors="replace") for path in paths
+    }
+    source = json.dumps(contents, indent=2)
+    assert len(contents) == len(paths), (
+        "Two matched files share a relative path; project_files must return each file once"
+    )
+    return paths, source
+
+
+def state_for(language: str, source: str) -> dict[str, str | dict[str, str]]:
+    """Build the state that TypeSafe answers questions against.
+
+    Args:
+        language: The unit's language, or ``project`` for project rules.
+        source: The unit's source, or the project's files as JSON.
+
+    Returns:
+        ``{"files": ...}`` for project rules, otherwise ``{"language": ..., "function": ...}``.
+
+    """
+    assert source, "state_for needs source text; pass the unit or project source that was hashed"
+    state: dict[str, str | dict[str, str]] = (
+        {"files": cast("dict[str, str]", json.loads(source))}
+        if language == PROJECT
+        else {"language": language, "function": source}
+    )
+    assert state, "state_for built an empty state; both branches must set at least one key"
+    return state
+
+
 def question_hash(rule: Rule) -> str:
+    """Identify a rule's current wording.
+
+    Args:
+        rule: The rule whose question is hashed.
+
+    Returns:
+        A digest that changes whenever the question is reworded.
+
+    """
     assert rule.question.strip(), "Rule question must not be blank"
     value = digest(rule.question)
-    assert len(value) == 32, "Question hash must be a digest"
+    assert len(value) == DIGEST_LENGTH, "Question hash must be a digest"
     return value
 
 
 class Analyser:
-    def __init__(self, config: Config, client: AsyncTypeSafeClient, store: Store):
+    """Ask rules about functions and projects, caching every answer."""
+
+    config: Config
+    client: AsyncTypeSafeClient
+    store: Store
+    _semaphore: asyncio.Semaphore
+
+    def __init__(self, config: Config, client: AsyncTypeSafeClient, store: Store) -> None:
+        """Prepare to ask questions with a bounded number of calls in flight.
+
+        Args:
+            config: The loaded nouls configuration.
+            client: The TypeSafe client that answers questions.
+            store: The store that caches answers and records results.
+
+        """
         assert config.concurrency > 0, "Concurrency must be positive"
         assert config.languages, "At least one language must be configured"
         self.config = config
@@ -60,12 +161,32 @@ class Analyser:
         self._semaphore = asyncio.Semaphore(config.concurrency)
 
     def threshold(self, rule: Rule) -> float:
+        """Find the probability at which a rule fires.
+
+        Args:
+            rule: An enabled rule.
+
+        Returns:
+            The rule's own threshold, or the global one when it has none.
+
+        """
         assert rule.enabled, "Thresholds apply to enabled rules"
         value = self.config.threshold if rule.threshold is None else rule.threshold
         assert 0.0 <= value <= 1.0, "Threshold must be in [0, 1]"
         return value
 
     async def ask(self, language: str, source: str, rules: dict[str, Rule]) -> Asked:
+        """Answer every rule for one unit, asking only what is not cached.
+
+        Args:
+            language: The unit's language, or ``project`` for project rules.
+            source: The unit's source, or the project's files as JSON.
+            rules: The rules to answer, by name.
+
+        Returns:
+            A probability for every rule and the cost of the questions that were asked.
+
+        """
         assert rules, "At least one rule must be asked"
         model = self.config.model
         hashes = {name: question_hash(rule) for name, rule in rules.items()}
@@ -78,7 +199,7 @@ class Analyser:
             return result
         async with self._semaphore:
             response = await self.client.system_one(
-                state={"language": language, "function": source},
+                state=state_for(language, source),
                 questions={
                     name: Noul(instructions=rule.question) for name, rule in missing.items()
                 },
@@ -94,20 +215,35 @@ class Analyser:
         return result
 
     async def analyse(self, text: str, language: str, path: Path) -> list[Finding]:
+        """Check every function in a file.
+
+        Args:
+            text: The file's current text.
+            language: The file's configured language.
+            path: The file's path, used to select rules and record results.
+
+        Returns:
+            The findings for rules that fired and were not labelled false.
+
+        """
         assert language in self.config.languages, "Language must be configured"
         rules = self.config.rules_for(language, path)
         if not rules:
             return []
-        units = extract_units(text, self.config.languages[language], self.config.is_test(path))
+        units = extract_units(
+            text, self.config.languages[language], tests=self.config.is_test(path)
+        )
         hashes = [unit_hash(language, unit.source) for unit in units]
         assert len(hashes) == len(units), "Every unit must have a hash"
-        self.store.save_units(language, list(zip(hashes, (unit.source for unit in units))))
+        self.store.save_units(
+            language, list(zip(hashes, (unit.source for unit in units), strict=True))
+        )
         results = await asyncio.gather(*(self.ask(language, unit.source, rules) for unit in units))
         assert len(results) == len(units), "Every unit must have an ask result"
         labels = self.store.labels(hashes)
         observations: list[Observation] = []
         findings: list[Finding] = []
-        for unit, uhash, result in zip(units, hashes, results):
+        for unit, uhash, result in zip(units, hashes, results, strict=True):
             for name, probability in result.probabilities.items():
                 rule = rules[name]
                 threshold = self.threshold(rule)
@@ -132,9 +268,67 @@ class Analyser:
         assert len(observations) == len(units) * len(rules), "Every rule must be observed per unit"
         return findings
 
+    async def analyse_project(self, root: Path) -> list[tuple[Path, Finding]]:
+        """Check the project rules against the project's files.
+
+        Args:
+            root: The project root that project rule globs are relative to.
+
+        Returns:
+            Each finding with the file it belongs on: the first matched file, or the root.
+
+        """
+        groups: dict[tuple[str, ...], dict[str, Rule]] = {}
+        for name, rule in self.config.project_rules().items():
+            assert rule.files, f"Project rule {name} has no files; the Rule validator must catch it"
+            groups.setdefault(tuple(rule.files), {})[name] = rule
+        findings: list[tuple[Path, Finding]] = []
+        recorded: dict[Path, tuple[list[Observation], list[Asked]]] = {}
+        for patterns, rules in groups.items():
+            paths, source = await asyncio.to_thread(project_source, root, list(patterns))
+            anchor = paths[0] if paths else root
+            uhash = unit_hash(PROJECT, source)
+            self.store.save_units(PROJECT, [(uhash, source)])
+            result = await self.ask(PROJECT, source, rules)
+            labels = self.store.labels([uhash])
+            observations, results = recorded.setdefault(anchor, ([], []))
+            results.append(result)
+            for name, probability in result.probabilities.items():
+                rule = rules[name]
+                threshold = self.threshold(rule)
+                fired = probability >= threshold and labels.get((name, uhash)) is not False
+                observations.append(
+                    Observation(
+                        name, uhash, PROJECT, 0, question_hash(rule), probability, threshold, fired
+                    )
+                )
+                if fired:
+                    span = Span(0, 0, 0, 0)
+                    findings.append(
+                        (
+                            anchor,
+                            Finding(name, rule.message, rule.severity, probability, span, uhash),
+                        )
+                    )
+        for anchor, (observations, results) in recorded.items():
+            self.record(anchor, PROJECT, observations, results)
+        assert all(finding.unit_hash for _, finding in findings), (
+            "A project finding has no unit hash, so it cannot be labelled; set it from the source"
+        )
+        return findings
+
     def record(
         self, path: Path, language: str, observations: list[Observation], results: list[Asked]
     ) -> None:
+        """Save the latest observations and the run's cost for one path.
+
+        Args:
+            path: The file the observations belong to.
+            language: The observations' language, or ``project``.
+            observations: One observation per rule and unit.
+            results: The answers that produced the observations.
+
+        """
         assert all(o.unit_hash for o in observations), "Observations must name their unit"
         key = str(path.resolve())
         asked = sum(r.asked for r in results)
@@ -145,9 +339,11 @@ class Analyser:
             language,
             self.config.model,
             observations,
-            len(results),
-            asked,
-            total - asked,
-            sum(r.input_tokens for r in results),
-            sum(r.output_tokens for r in results),
+            RunStats(
+                units=len(results),
+                asked=asked,
+                cached=total - asked,
+                input_tokens=sum(r.input_tokens for r in results),
+                output_tokens=sum(r.output_tokens for r in results),
+            ),
         )

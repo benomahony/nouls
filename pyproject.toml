@@ -58,7 +58,22 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "N"]
+preview = true
+select = ["ALL"]
+# Only rules that contradict another rule or tool enforced here are ignored.
+ignore = [
+    "assert",                             # nasa-lsp requires two asserts per function; pytest asserts
+    "missing-trailing-comma",             # conflicts with ruff format, per ruff's formatter docs
+    "incorrect-blank-line-before-class",  # contradicts D211, which is enforced instead
+    "multi-line-summary-second-line",     # contradicts D212, which is enforced instead
+]
+
+[tool.ruff.lint.per-file-ignores]
+# These tests exist to run nouls as a real process, with fixed arguments.
+"tests/test_integration.py" = ["suspicious-subprocess-import", "subprocess-without-shell-equals-true"]
+
+[tool.ruff.lint.flake8-copyright]
+notice-rgx = "(?i)Copyright \\d{4} Ben O'Mahony"
 
 [tool.ruff.format]
 quote-style = "double"
@@ -73,7 +88,10 @@ addopts = [
     "--cov-report=html",
     "--cov-fail-under=90",
     "--strict-markers",
+    "--strict-config",
 ]
+filterwarnings = ["error"]
+usefixtures = ["isolated"]
 markers = [
     "unit: Fast unit tests (no subprocess, can run in parallel with -n auto)",
     "integration: Slow integration tests (subprocess, run sequentially)",
@@ -95,8 +113,10 @@ exclude_dirs = ["tests"]
 skips = ["B101"]
 
 [tool.basedpyright]
-include = ["src/nouls"]
-typeCheckingMode = "standard"
+include = ["src/nouls", "tests"]
+typeCheckingMode = "all"
+# ruff's ISC003 requires implicit concatenation, so the opposite check is off.
+reportImplicitStringConcatenation = false
 
 [tool.deptry]
 extend_exclude = ["tests"]

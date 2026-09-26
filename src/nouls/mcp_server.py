@@ -1,70 +1,119 @@
-"""MCP server for nouls documentation.
+# Copyright 2026 Ben O'Mahony
+# SPDX-License-Identifier: MIT
+r"""MCP server for nouls documentation.
 
 Provides documentation access via Model Context Protocol.
 Usage:
-    claude mcp add nouls --transport stdio \\
+    claude mcp add nouls --transport stdio \
         python src/nouls/mcp_server.py
 """
 
+import asyncio
 import logging
 from pathlib import Path
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Resource
+from pydantic import AnyUrl
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Server("nouls")
 
+DOCS = Path(__file__).parent.parent.parent / "docs"
+SCHEME = "doc://nouls/"
+
+
+def doc_resources(docs: Path) -> list[Resource]:
+    """Describe every Markdown page under the docs directory.
+
+    Args:
+        docs: The nouls docs directory.
+
+    Returns:
+        One resource per page, addressed as doc://nouls/<relative path>.
+
+    """
+    assert docs.is_dir(), (
+        f"The nouls docs directory {docs} is missing; run from a source checkout with docs/"
+    )
+    resources = [
+        Resource(
+            uri=AnyUrl(f"{SCHEME}{page.relative_to(docs).as_posix()}"),
+            name=page.relative_to(docs).as_posix(),
+            mimeType="text/markdown",
+            description=f"Documentation: {page.relative_to(docs).as_posix()}",
+        )
+        for page in sorted(docs.rglob("*.md"))
+    ]
+    assert all(str(r.uri).startswith(SCHEME) for r in resources), (
+        f"Every resource URI must start with {SCHEME}; build it from SCHEME"
+    )
+    return resources
+
+
+def read_doc(docs: Path, uri: str) -> str:
+    """Read one documentation page.
+
+    Args:
+        docs: The nouls docs directory.
+        uri: A doc://nouls/ URI from list_resources.
+
+    Returns:
+        The page's Markdown text.
+
+    """
+    assert uri.startswith(SCHEME), (
+        f"{uri} is not a nouls documentation URI; use one from list_resources, "
+        f"which all start with {SCHEME}"
+    )
+    page = (docs / uri.removeprefix(SCHEME)).resolve()
+    assert page.is_relative_to(docs.resolve()), (
+        f"{uri} points outside the nouls docs directory; use a URI from list_resources"
+    )
+    assert page.is_file(), (
+        f"There is no nouls documentation page at {uri}; use a URI from list_resources"
+    )
+    return page.read_text(encoding="utf-8")
+
 
 @app.list_resources()
 async def list_resources() -> list[Resource]:
-    """List available documentation resources."""
-    assert app is not None, "Server must be initialized"
+    """List available documentation resources.
 
-    docs_dir = Path(__file__).parent.parent.parent / "docs"
-    assert docs_dir.exists(), "Docs directory must exist"
+    Returns:
+        One resource per documentation page.
 
-    resources = []
-    for doc_file in docs_dir.rglob("*.md"):
-        relative_path = doc_file.relative_to(docs_dir)
-        uri_str = f"doc://nouls/{relative_path}"
-        resources.append(
-            Resource(
-                uri=uri_str,  # type: ignore[arg-type]
-                name=str(relative_path),
-                mimeType="text/markdown",
-                description=f"Documentation: {relative_path}",
-            )
-        )
-
+    """
+    assert DOCS.is_absolute(), (
+        f"DOCS must be absolute so the server works from any directory; got {DOCS}"
+    )
+    resources = await asyncio.to_thread(doc_resources, DOCS)
+    assert all(r.mimeType == "text/markdown" for r in resources), (
+        "Every documentation resource is Markdown; doc_resources must set mimeType"
+    )
     return resources
 
 
 @app.read_resource()
-async def read_resource(uri) -> str:  # type: ignore[no-untyped-def]
-    """Read documentation content."""
-    uri_str = str(uri)
-    assert uri_str is not None, "read_resource needs a URI; use one from list_resources"
-    assert uri_str.startswith("doc://nouls/"), (
-        f"{uri_str} is not a nouls documentation URI; use one from list_resources, "
-        "which all start with doc://nouls/"
-    )
+async def read_resource(uri: AnyUrl) -> str:
+    """Read documentation content.
 
-    path = uri_str.replace("doc://nouls/", "")
-    docs_dir = Path(__file__).parent.parent.parent / "docs"
-    doc_file = docs_dir / path
+    Args:
+        uri: A doc://nouls/ URI from list_resources.
 
-    assert doc_file.exists(), (
-        f"There is no nouls documentation page called {path}; use a URI from list_resources"
-    )
-    assert doc_file.is_relative_to(docs_dir), (
-        f"{path} points outside the nouls docs directory; use a URI from list_resources"
-    )
+    Returns:
+        The page's Markdown text.
 
-    return doc_file.read_text()
+    """
+    assert str(uri).startswith(SCHEME), (
+        f"{uri} is not a nouls documentation URI; use one from list_resources"
+    )
+    text = await asyncio.to_thread(read_doc, DOCS, str(uri))
+    assert isinstance(text, str), "read_doc must return the page's text"
+    return text
 
 
 async def main() -> None:
@@ -84,6 +133,4 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    import asyncio
-
     asyncio.run(main())

@@ -1,5 +1,8 @@
+# Copyright 2026 Ben O'Mahony
+# SPDX-License-Identifier: MIT
+"""Command line interface: check, rules, label, review, serve and stats."""
+
 import asyncio
-import sys
 from collections import Counter
 from collections.abc import Iterator
 from pathlib import Path
@@ -12,9 +15,11 @@ from rich.syntax import Syntax
 from rich.table import Table
 from typesafe_sdk import AsyncTypeSafeClient
 
-from nouls.analyser import Analyser, Finding, unit_hash
-from nouls.config import Config, Rule, Severity, load_config
-from nouls.stats import SAMPLE, display, stats
+from nouls.analyser import PROJECT, Analyser, Finding, project_source, unit_hash
+from nouls.config import Config, Rule, Severity, find_root, load_config
+from nouls.output import fail, say
+from nouls.server import server
+from nouls.stats import SAMPLE, SampleRow, display, stats
 from nouls.store import Store
 from nouls.units import extract_units
 
@@ -40,7 +45,7 @@ Usage examples:
 """,
 )
 
-app.command(stats)
+_ = app.command(stats)
 console = Console()
 
 Positive = Annotated[int, Parameter(validator=validators.Number(gt=0))]
@@ -50,6 +55,16 @@ ConfigOption = Annotated[
 
 
 def discover(paths: list[Path], config: Config) -> Iterator[tuple[Path, str]]:
+    """Find every file to check under the given paths.
+
+    Args:
+        paths: Files or directories to check.
+        config: The loaded configuration, for exclusions and languages.
+
+    Yields:
+        Each file with a configured language, and that language.
+
+    """
     assert paths, "At least one path must be given"
     for path in paths:
         candidates = (
@@ -64,17 +79,35 @@ def discover(paths: list[Path], config: Config) -> Iterator[tuple[Path, str]]:
                 yield candidate, language
 
 
-def render(path: Path, finding: Finding, show_probability: bool) -> str:
+def render(path: Path, finding: Finding, *, show_probability: bool) -> str:
+    """Format a finding as one line of plain text.
+
+    Args:
+        path: The file the finding belongs to.
+        finding: The finding to format.
+        show_probability: Whether to include the probability.
+
+    Returns:
+        ``path:line:column: severity [rule] message``.
+
+    """
     assert finding.span.line >= 0, "Finding lines are zero based"
     text = (
         f"{path}:{finding.span.line + 1}:{finding.span.column + 1}: "
-        f"{finding.severity} [{finding.rule}] {finding.describe(show_probability)}"
+        f"{finding.severity} [{finding.rule}] {finding.describe(show_probability=show_probability)}"
     )
     assert f"[{finding.rule}]" in text, "Rendered finding must name its rule"
     return text
 
 
-def render_pretty(findings: list[tuple[Path, Finding]], show_probability: bool) -> None:
+def render_pretty(findings: list[tuple[Path, Finding]], *, show_probability: bool) -> None:
+    """Print findings grouped by file, with a summary, for a terminal.
+
+    Args:
+        findings: Each finding with its file.
+        show_probability: Whether to include probabilities.
+
+    """
     by_path: dict[Path, list[Finding]] = {}
     for path, finding in findings:
         by_path.setdefault(path, []).append(finding)
@@ -86,9 +119,10 @@ def render_pretty(findings: list[tuple[Path, Finding]], show_probability: bool) 
         for finding in sorted(found, key=lambda f: (f.span.line, f.span.column)):
             style = SEVERITY_STYLE[finding.severity]
             location = f"{finding.span.line + 1}:{finding.span.column + 1}"
+            message = finding.describe(show_probability=show_probability)
             console.print(
                 f"  [dim]{location:<8}[/dim][{style}]{finding.severity:<8}[/{style}]"
-                f"[bold]{finding.rule}[/bold]  {finding.describe(show_probability)}",
+                f"[bold]{finding.rule}[/bold]  {message}",
                 soft_wrap=True,
             )
     console.print()
@@ -105,45 +139,80 @@ def render_pretty(findings: list[tuple[Path, Finding]], show_probability: bool) 
     console.print(f"{summary}  across {len(by_path)} {files}")
 
 
-async def run_check(paths: list[Path], config: Config) -> int:
+async def run_check(paths: list[Path], config: Config, root: Path) -> int:
+    """Check files and the project, then print the findings.
+
+    Args:
+        paths: Files or directories to check.
+        config: The loaded configuration.
+        root: The project root for project rules.
+
+    Returns:
+        1 when an error level rule fired, otherwise 0.
+
+    """
     assert paths, "At least one path must be given"
     async with AsyncTypeSafeClient() as client:
         analyser = Analyser(config, client, Store(config.store_path()))
         files = list(discover(paths, config))
         results = await asyncio.gather(
-            *(analyser.analyse(path.read_text(), language, path) for path, language in files)
+            *(
+                analyser.analyse(path.read_text(encoding="utf-8"), language, path)
+                for path, language in files
+            )
         )
+        project = await analyser.analyse_project(root)
     assert len(results) == len(files), "Every file must have results"
-    findings = [(path, finding) for (path, _), found in zip(files, results) for finding in found]
+    findings = [
+        (path, finding)
+        for (path, _), found in zip(files, results, strict=True)
+        for finding in found
+    ]
+    findings += [(Path(display(str(path))), finding) for path, finding in project]
     if console.is_terminal:
-        render_pretty(findings, config.show_probability)
+        render_pretty(findings, show_probability=config.show_probability)
     else:
         for path, finding in findings:
-            print(render(path, finding, config.show_probability))
+            say(render(path, finding, show_probability=config.show_probability))
     return 1 if any(finding.severity == "error" for _, finding in findings) else 0
 
 
 @app.command
 def check(*paths: Path, config: ConfigOption = None) -> int:
-    """Lint files or directories and exit non zero when any error level rule fires."""
+    """Lint files or directories and exit non zero when any error level rule fires.
+
+    Returns:
+        1 when an error level rule fired, 2 for a usage error, otherwise 0.
+
+    """
     targets = list(paths) or [Path.cwd()]
     missing = [target for target in targets if not target.exists()]
     if missing:
-        print(
+        return fail(
             f"nouls: cannot check {', '.join(map(str, missing))} because it does not exist. "
-            "Fix the path, or run nouls check with no paths to lint the current directory.",
-            file=sys.stderr,
+            "Fix the path, or run nouls check with no paths to lint the current directory."
         )
-        return 2
     assert targets, "At least one target must be checked"
     root = targets[0] if targets[0].is_dir() else targets[0].parent
     assert root.is_dir(), "Config search root must be a directory"
-    return asyncio.run(run_check(targets, load_config(root, config)))
+    return asyncio.run(run_check(targets, load_config(root, config), find_root(root.resolve())))
 
 
 def rule_fields(loaded: Config, rule: Rule) -> tuple[Severity, float, str]:
+    """Summarise where and how strongly a rule applies.
+
+    Args:
+        loaded: The loaded configuration, for the global threshold.
+        rule: An enabled rule.
+
+    Returns:
+        The rule's severity, threshold and a description of its scope.
+
+    """
     assert rule.enabled, "Only enabled rules are describable"
     scope = ", ".join(rule.languages) if rule.languages else "all languages"
+    if rule.scope == "project":
+        scope = "project"
     if rule.files:
         scope += f" in {len(rule.files)} file patterns"
     threshold = loaded.threshold if rule.threshold is None else rule.threshold
@@ -152,6 +221,17 @@ def rule_fields(loaded: Config, rule: Rule) -> tuple[Severity, float, str]:
 
 
 def describe_rule(loaded: Config, name: str, rule: Rule) -> str:
+    """Describe a rule on one line.
+
+    Args:
+        loaded: The loaded configuration.
+        name: The rule's name.
+        rule: The rule.
+
+    Returns:
+        ``name (severity, threshold t, scope): question``.
+
+    """
     assert name in loaded.rules, "Rule must be configured"
     assert rule.question.strip(), "Rule question must not be blank"
     severity, threshold, scope = rule_fields(loaded, rule)
@@ -160,7 +240,12 @@ def describe_rule(loaded: Config, name: str, rule: Rule) -> str:
 
 @app.command
 def rules(config: ConfigOption = None) -> int:
-    """List the rules that are enabled for this project."""
+    """List the rules that are enabled for this project.
+
+    Returns:
+        0, or 2 when every rule is disabled.
+
+    """
     loaded = load_config(Path.cwd(), config)
     assert loaded.rules, (
         "The loaded config has no rules, so defaults.yaml was not merged in; "
@@ -168,11 +253,10 @@ def rules(config: ConfigOption = None) -> int:
     )
     enabled = {name: rule for name, rule in loaded.rules.items() if rule.enabled}
     if not enabled:
-        sys.stderr.write(
+        return fail(
             "nouls: every rule is disabled in your nouls config, so there is nothing to list. "
-            "Set enabled: true on the rules you want, or remove enabled: false from them.\n"
+            "Set enabled: true on the rules you want, or remove enabled: false from them."
         )
-        return 2
     assert all(rule.enabled for rule in enabled.values()), (
         "rules is about to list a disabled rule; filter enabled on rule.enabled"
     )
@@ -204,63 +288,99 @@ def label(
     *,
     config: ConfigOption = None,
 ) -> int:
-    """Record whether a rule's finding on the function at PATH:LINE is a real problem."""
+    """Record whether a rule's finding on the function at PATH:LINE is a real problem.
+
+    Returns:
+        0 when the label was saved, or 2 for a usage error.
+
+    """
     loaded = load_config(path.parent, config)
     language = loaded.language_for(path)
     if rule not in loaded.rules:
-        print(loaded.unknown_rule(rule), file=sys.stderr)
-        return 2
+        return fail(loaded.unknown_rule(rule))
+    if loaded.rules[rule].scope == "project":
+        return label_project(loaded, path, rule, verdict)
     if language is None:
-        print(loaded.unsupported(path), file=sys.stderr)
-        return 2
+        return fail(loaded.unsupported(path))
     if not path.is_file():
-        print(
+        return fail(
             f"nouls: cannot label {path} because it does not exist. "
-            "Use the path exactly as nouls check printed it.",
-            file=sys.stderr,
+            "Use the path exactly as nouls check printed it."
         )
-        return 2
     units = [
         u
-        for u in extract_units(path.read_text(), loaded.languages[language], loaded.is_test(path))
+        for u in extract_units(
+            path.read_text(encoding="utf-8"),
+            loaded.languages[language],
+            tests=loaded.is_test(path),
+        )
         if u.contains(line - 1)
     ]
     if not units:
-        print(
+        return fail(
             f"nouls: line {line} of {path} is outside every function, "
             "so there is no finding there to label. "
-            "Use the line number nouls check printed for the finding.",
-            file=sys.stderr,
+            "Use the line number nouls check printed for the finding."
         )
-        return 2
     unit = min(units, key=lambda u: u.last_line - u.first_line)
     assert unit.contains(line - 1), "Chosen function must contain the line"
     assert rule in loaded.rules, "Rule must be configured"
-    Store(loaded.store_path()).label(rule, unit_hash(language, unit.source), verdict == "real")
-    print(f"Labelled {rule} on {unit.name} as {verdict}")
+    Store(loaded.store_path()).label(rule, unit_hash(language, unit.source), real=verdict == "real")
+    say(f"Labelled {rule} on {unit.name} as {verdict}")
+    return 0
+
+
+def label_project(loaded: Config, path: Path, rule: str, verdict: str) -> int:
+    """Record a verdict on a project rule's finding.
+
+    Args:
+        loaded: The loaded configuration.
+        path: A file or directory in the project.
+        rule: A rule with scope: project.
+        verdict: ``real`` or ``false``.
+
+    Returns:
+        0 when the label was saved, or the usage error code.
+
+    """
+    patterns = loaded.rules[rule].files
+    assert patterns, f"Project rule {rule} has no files; the Rule validator must reject it"
+    if not path.exists():
+        return fail(
+            f"nouls: cannot label {path} because it does not exist. "
+            "Use the path exactly as nouls check printed it."
+        )
+    root = find_root(path.resolve() if path.is_dir() else path.resolve().parent)
+    _, source = project_source(root, patterns)
+    Store(loaded.store_path()).label(rule, unit_hash(PROJECT, source), real=verdict == "real")
+    assert verdict in {"real", "false"}, f"verdict must be real or false but got {verdict}"
+    say(f"Labelled {rule} on the project at {display(str(root))} as {verdict}")
     return 0
 
 
 @app.command
 def review(rule: str, *, limit: Positive = 20, config: ConfigOption = None) -> int:
-    """Label unlabelled functions for RULE, sampled evenly across probability bands."""
+    """Label unlabelled functions for RULE, sampled evenly across probability bands.
+
+    Returns:
+        0, or 2 when the rule does not exist.
+
+    """
     loaded = load_config(Path.cwd(), config)
     if rule not in loaded.rules:
-        print(loaded.unknown_rule(rule), file=sys.stderr)
-        return 2
+        return fail(loaded.unknown_rule(rule))
     assert limit > 0, "Sample size must be positive"
     store = Store(loaded.store_path())
     console.print(f"[bold]{rule}[/bold]: {loaded.rules[rule].question}")
     for uhash, language, source, name, path, line, probability in store.query(
-        SAMPLE, (rule, limit)
+        SampleRow, SAMPLE, (rule, limit)
     ):
         if not 0.0 <= probability <= 1.0:
-            print(
+            _ = fail(
                 f"nouls: skipping {name} at {display(path)}:{line + 1} because its stored "
                 f"probability {probability} is outside 0 to 1, so the cache is corrupt. "
                 f"Run nouls check {display(path)} to record it again. If it stays corrupt, "
-                f"delete {loaded.store_path()}, which also deletes your labels.",
-                file=sys.stderr,
+                f"delete {loaded.store_path()}, which also deletes your labels."
             )
             continue
         console.rule(f"{name}  {display(path)}:{line + 1}  p={probability:.2f}")
@@ -270,15 +390,13 @@ def review(rule: str, *, limit: Positive = 20, config: ConfigOption = None) -> i
         if answer == "q":
             return 0
         if answer in {"y", "n"}:
-            store.label(rule, uhash, answer == "y")
+            store.label(rule, uhash, real=answer == "y")
     return 0
 
 
 @app.command
 def serve() -> None:
     """Start the language server on stdio."""
-    from nouls.server import server
-
     assert server.name == "nouls", "Language server must identify as nouls"
     assert not server.pending, "Language server must start idle"
     server.start_io()

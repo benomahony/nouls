@@ -1,14 +1,15 @@
+# Copyright 2026 Ben O'Mahony
+# SPDX-License-Identifier: MIT
+"""Tests for the nouls language server."""
+
 import asyncio
-from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import cast
 
 import pytest
 from lsprotocol import types
 
-from nouls.analyser import Analyser
-from nouls.config import Config
 from nouls.server import (
     NoulsServer,
     code_actions,
@@ -18,48 +19,46 @@ from nouls.server import (
     did_save,
     label,
     lint,
+    unit_hash_of,
 )
-from nouls.store import Store
-from tests.conftest import PYTHON, FakeClient, as_client
+from nouls.store import DIGEST_LENGTH
+from tests.conftest import PYTHON, FakeClient, FakeServer, as_server
 
 pytestmark = pytest.mark.unit
 
 
-@dataclass
-class FakeServer:
-    analyser: Analyser
-    document: SimpleNamespace
-    pending: dict[str, asyncio.Task[None]] = field(default_factory=dict)
-    published: list[types.PublishDiagnosticsParams] = field(default_factory=list)
-
-    @property
-    def workspace(self) -> SimpleNamespace:
-        return SimpleNamespace(get_text_document=lambda _: self.document)
-
-    def text_document_publish_diagnostics(self, params: types.PublishDiagnosticsParams) -> None:
-        self.published.append(params)
+class TypeSafeUnavailableError(RuntimeError):
+    """TypeSafe could not be reached."""
 
 
 def identifier(uri: str) -> types.TextDocumentIdentifier:
+    """Name a document for the language server.
+
+    Args:
+        uri: The document's URI.
+
+    Returns:
+        The document identifier.
+
+    """
     return types.TextDocumentIdentifier(uri=uri)
 
 
-@pytest.fixture
-def ls(tmp_path: Path, config: Config, store: Store) -> Any:
-    config.debounce_ms = 0
-    path = tmp_path / "app.py"
-    path.write_text(PYTHON)
-    document = SimpleNamespace(path=str(path), source=PYTHON, version=3)
-    return FakeServer(Analyser(config, as_client(FakeClient()), store), document)
+async def settle(ls: FakeServer, uri: str) -> None:
+    """Wait for a document's pending lint to finish.
 
+    Args:
+        ls: The fake language server.
+        uri: The document.
 
-async def settle(ls: Any, uri: str) -> None:
+    """
     await ls.pending[uri]
 
 
-async def test_open_publishes_diagnostics_with_function_hash(ls: Any) -> None:
+async def test_open_publishes_diagnostics_with_function_hash(ls: FakeServer) -> None:
+    """Open publishes diagnostics with function hash."""
     did_open(
-        ls,
+        as_server(ls),
         types.DidOpenTextDocumentParams(
             text_document=types.TextDocumentItem(
                 uri="file:///app.py", language_id="python", version=3, text=PYTHON
@@ -72,57 +71,72 @@ async def test_open_publishes_diagnostics_with_function_hash(ls: Any) -> None:
     assert (diagnostic.code, diagnostic.source, params.version) == ("unit_mismatch", "nouls", 3)
     assert diagnostic.severity == types.DiagnosticSeverity.Error
     assert diagnostic.range.start == types.Position(line=4, character=8)
-    assert len(diagnostic.data["unit_hash"]) == 32
+    unit_hash = unit_hash_of(diagnostic)
+    assert unit_hash is not None
+    assert len(unit_hash) == DIGEST_LENGTH
 
 
-async def test_change_relints_only_when_linting_on_change(ls: Any) -> None:
+async def test_change_relints_only_when_linting_on_change(ls: FakeServer) -> None:
+    """Change relints only when linting on change."""
     change = types.DidChangeTextDocumentParams(
         text_document=types.VersionedTextDocumentIdentifier(uri="file:///app.py", version=4),
         content_changes=[],
     )
     ls.analyser.config.lint_on = "save"
-    did_change(ls, change)
+    did_change(as_server(ls), change)
     assert ls.pending == {}
     ls.analyser.config.lint_on = "change"
-    did_change(ls, change)
+    did_change(as_server(ls), change)
     await settle(ls, "file:///app.py")
     assert len(ls.published) == 1
 
 
-async def test_save_cancels_the_previous_lint(ls: Any) -> None:
+async def test_save_cancels_the_previous_lint(ls: FakeServer) -> None:
+    """Save cancels the previous lint."""
     ls.analyser.config.debounce_ms = 10_000
-    did_save(ls, types.DidSaveTextDocumentParams(text_document=identifier("file:///app.py")))
+    did_save(
+        as_server(ls), types.DidSaveTextDocumentParams(text_document=identifier("file:///app.py"))
+    )
     first = ls.pending["file:///app.py"]
-    did_save(ls, types.DidSaveTextDocumentParams(text_document=identifier("file:///app.py")))
+    did_save(
+        as_server(ls), types.DidSaveTextDocumentParams(text_document=identifier("file:///app.py"))
+    )
     await asyncio.sleep(0)
     assert first.cancelled()
-    did_close(ls, types.DidCloseTextDocumentParams(text_document=identifier("file:///app.py")))
+    did_close(
+        as_server(ls), types.DidCloseTextDocumentParams(text_document=identifier("file:///app.py"))
+    )
     assert ls.pending == {}
     assert ls.published[-1].diagnostics == []
 
 
-async def test_unknown_languages_publish_nothing(ls: Any) -> None:
-    ls.document.path = "/tmp/notes.txt"
-    await lint(ls, "file:///notes.txt")
+async def test_unknown_languages_publish_nothing(ls: FakeServer, tmp_path: Path) -> None:
+    """Unknown languages publish nothing."""
+    ls.document.path = str(tmp_path / "notes.txt")
+    await lint(as_server(ls), "file:///notes.txt")
     assert ls.published == []
-    assert ls.analyser.client.calls == []
+    assert ls.client.calls == []
 
 
 async def test_analysis_failures_are_logged_not_raised(
-    ls: Any, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ls: FakeServer, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
+    """Analysis failures are logged not raised."""
+
     async def explode(*_: object) -> None:
-        raise RuntimeError("TypeSafe unavailable")
+        await asyncio.sleep(0)
+        raise TypeSafeUnavailableError
 
     monkeypatch.setattr(ls.analyser, "analyse", explode)
-    await lint(ls, "file:///app.py")
+    await lint(as_server(ls), "file:///app.py")
     assert ls.published == []
     assert "nouls could not analyse" in caplog.text
     assert "TYPESAFE_API_KEY" in caplog.text
 
 
-async def test_code_actions_offer_both_labels_and_relabel(ls: Any) -> None:
-    await lint(ls, "file:///app.py")
+async def test_code_actions_offer_both_labels_and_relabel(ls: FakeServer) -> None:
+    """Code actions offer both labels and relabel."""
+    await lint(as_server(ls), "file:///app.py")
     ours = ls.published[0].diagnostics[0]
     theirs = types.Diagnostic(range=ours.range, message="other", source="ruff")
     params = types.CodeActionParams(
@@ -130,14 +144,15 @@ async def test_code_actions_offer_both_labels_and_relabel(ls: Any) -> None:
         range=ours.range,
         context=types.CodeActionContext(diagnostics=[ours, theirs]),
     )
-    actions = code_actions(ls, params)
+    actions = code_actions(as_server(ls), params)
     assert [action.title for action in actions] == [
         "nouls: not a problem (unit_mismatch)",
         "nouls: confirm finding (unit_mismatch)",
     ]
     command = actions[0].command
     assert command is not None
-    label(ls, *cast(list[Any], command.arguments))
+    uri, rule, unit_hash, verdict = cast("list[str]", command.arguments)
+    label(as_server(ls), uri, rule, unit_hash, verdict)
     await settle(ls, "file:///app.py")
     assert ls.published[-1].diagnostics == []
 
@@ -145,10 +160,13 @@ async def test_code_actions_offer_both_labels_and_relabel(ls: Any) -> None:
 def test_server_builds_its_analyser_from_the_workspace(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, client: FakeClient
 ) -> None:
+    """Server builds its analyser from the workspace."""
     server = NoulsServer()
-    monkeypatch.setattr(
-        NoulsServer, "workspace", property(lambda _: SimpleNamespace(root_path=str(tmp_path)))
-    )
+
+    def workspace(_server: NoulsServer) -> SimpleNamespace:
+        return SimpleNamespace(root_path=str(tmp_path))
+
+    monkeypatch.setattr(NoulsServer, "workspace", property(workspace))
     analyser = server.analyser
     assert analyser is server.analyser
     assert analyser.client is client

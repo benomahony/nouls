@@ -1,6 +1,10 @@
+# Copyright 2026 Ben O'Mahony
+# SPDX-License-Identifier: MIT
+"""Split source files into function units with tree-sitter."""
+
 import re
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
 
 from tree_sitter import Node, Parser
 from tree_sitter_language_pack import get_parser as _get_parser
@@ -8,8 +12,17 @@ from tree_sitter_language_pack import get_parser as _get_parser
 from nouls.config import Language
 
 
-@lru_cache(maxsize=None)
+@cache
 def get_parser(grammar: str) -> Parser:
+    """Load the tree-sitter parser for a grammar.
+
+    Args:
+        grammar: A tree-sitter-language-pack name.
+
+    Returns:
+        A cached parser.
+
+    """
     assert grammar, (
         "A language in your nouls config has an empty grammar; "
         "set grammar to a tree-sitter-language-pack name such as python"
@@ -24,6 +37,8 @@ def get_parser(grammar: str) -> Parser:
 
 @dataclass(frozen=True)
 class Span:
+    """Where a diagnostic sits, zero based."""
+
     line: int
     column: int
     end_line: int
@@ -32,6 +47,8 @@ class Span:
 
 @dataclass(frozen=True)
 class Unit:
+    """One function, method, fixture or test call sent as a question."""
+
     kind: str
     name: str
     source: str
@@ -40,12 +57,31 @@ class Unit:
     last_line: int
 
     def contains(self, line: int) -> bool:
+        """Tell whether a line falls inside the unit.
+
+        Args:
+            line: A zero based line number.
+
+        Returns:
+            True when the line is between the unit's first and last lines.
+
+        """
         assert line >= 0, "Lines are zero based"
         assert self.first_line <= self.last_line, "Unit must not end before it starts"
         return self.first_line <= line <= self.last_line
 
 
 def headline(node: Node, source: str) -> Span:
+    """Find where to put a unit's diagnostic.
+
+    Args:
+        node: The unit's node.
+        source: The unit's source text.
+
+    Returns:
+        The node's name, or its first line when it has none.
+
+    """
     assert source, "headline needs the unit's source text; pass the source sliced from the node"
     name = node.child_by_field_name("name")
     if name is not None:
@@ -68,6 +104,16 @@ def headline(node: Node, source: str) -> Span:
 
 
 def attached_start(node: Node, attached: set[str]) -> Node:
+    """Find the first decorator or attribute that belongs to a unit.
+
+    Args:
+        node: The unit's node.
+        attached: Node types that belong to the unit they wrap or precede.
+
+    Returns:
+        The earliest attached node, or the unit's node when there is none.
+
+    """
     assert node.type not in attached, (
         f"{node.type} is listed in both units and attached for this language; "
         "remove it from one of them in the nouls config"
@@ -85,6 +131,16 @@ def attached_start(node: Node, attached: set[str]) -> Node:
 
 
 def callee(node: Node, language: Language) -> str | None:
+    """Find the name of the function a test call calls.
+
+    Args:
+        node: A call node.
+        language: The language, which must declare ``calls``.
+
+    Returns:
+        The callee's name, such as ``it``, or None when it has none.
+
+    """
     assert language.calls is not None, (
         f"callee was called for {language.grammar}, which has no calls section; "
         "only call it when language.calls is set"
@@ -100,7 +156,18 @@ def callee(node: Node, language: Language) -> str | None:
     return match.group() if match else None
 
 
-def extract_units(text: str, language: Language, tests: bool = False) -> list[Unit]:
+def extract_units(text: str, language: Language, *, tests: bool = False) -> list[Unit]:
+    """Split a file into units.
+
+    Args:
+        text: The file's text.
+        language: The file's language.
+        tests: Whether the file is a test file, so test calls become units.
+
+    Returns:
+        Every unit, in order of where its diagnostic sits.
+
+    """
     assert language.units, "Language must declare unit node types"
     kinds = set(language.units)
     attached = set(language.attached)

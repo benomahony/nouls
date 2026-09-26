@@ -166,6 +166,58 @@ rules:
     question: Does the function mix high level business steps with low level mechanical detail, such as parsing, raw SQL or byte handling, in the same body?
     message: This function mixes high level steps with low level detail such as parsing or raw SQL. Move the low level detail into well named helper functions
     severity: info
+  relaxed_warnings:
+    scope: project
+    question: Do these project files leave compiler or linter warnings disabled, relaxed or allowed to pass, instead of enabling every warning at the strictest setting and failing on any warning?
+    message: The project turns some compiler or linter warnings off, relaxes them or lets them pass. Enable every warning at the strictest setting, such as ruff select ALL or clippy pedantic, and make any warning fail the build
+    severity: warning
+    files: &project_files
+      - pyproject.toml
+      - setup.cfg
+      - tox.ini
+      - ruff.toml
+      - .ruff.toml
+      - mypy.ini
+      - .mypy.ini
+      - pyrightconfig.json
+      - package.json
+      - tsconfig.json
+      - tsconfig.*.json
+      - eslint.config.*
+      - .eslintrc*
+      - biome.json
+      - biome.jsonc
+      - Cargo.toml
+      - clippy.toml
+      - .clippy.toml
+      - .cargo/config.toml
+      - go.mod
+      - .golangci.y*ml
+      - .golangci.toml
+      - staticcheck.conf
+      - CMakeLists.txt
+      - Makefile
+      - meson.build
+      - .clang-tidy
+      - build.gradle
+      - build.gradle.kts
+      - pom.xml
+      - .rubocop.yml
+      - .luacheckrc
+      - .pre-commit-config.yaml
+      - .github/workflows/*.y*ml
+      - .gitlab-ci.yml
+      - .circleci/config.yml
+      - Justfile
+      - justfile
+      - Taskfile.y*ml
+      - noxfile.py
+  unscheduled_static_analysis:
+    scope: project
+    question: Is there no strict static analyser, such as a type checker in strict mode or a linter with all rules selected, that these project files run automatically at least daily or on every change and require to pass with zero warnings?
+    message: No strict static analyser runs automatically with zero warnings allowed. Run a strict type checker and a linter with all rules in CI on every change and on a daily schedule, and fail the build on any warning
+    severity: warning
+    files: *project_files
   test_not_isolated:
     question: Is this a test case itself, not a fixture, setup or teardown hook or helper, whose result could change depending on which other tests ran before it, for example because it reads or mutates module level, class level, database or filesystem state that other tests also touch without resetting it?
     message: This test's result can depend on which tests ran before it, because it shares state with them. Give it its own state, or reset the shared state before it runs

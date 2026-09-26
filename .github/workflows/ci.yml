@@ -5,6 +5,10 @@ on:
     branches: [main]
   push:
     branches: [main]
+  schedule:
+    # Run every analyser daily, so new ruff and basedpyright checks surface without a push.
+    - cron: "0 6 * * *"
+  workflow_dispatch:
 
 jobs:
   test:
