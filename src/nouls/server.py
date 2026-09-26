@@ -106,8 +106,7 @@ async def lint(ls: NoulsServer, uri: str) -> None:
     language = analyser.config.language_for(path)
     root = find_root(path.parent)
     in_project = any(
-        path in project_files(root, rule.files or [])
-        for rule in analyser.config.project_rules().values()
+        path in project_files(root, patterns) for patterns in analyser.config.file_patterns()
     )
     if language is None and not in_project:
         return
@@ -115,6 +114,7 @@ async def lint(ls: NoulsServer, uri: str) -> None:
         findings = await analyser.analyse(document.source, language, path) if language else []
         if in_project:
             project = await analyser.analyse_project(root)
+            project += await analyser.analyse_settings(root)
             findings += [finding for anchor, finding in project if anchor == path]
     except Exception:
         logger.exception(

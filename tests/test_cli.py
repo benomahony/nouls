@@ -15,7 +15,7 @@ from nouls import cli
 from nouls.config import load_config
 from nouls.output import USAGE_ERROR
 from nouls.store import Store
-from tests.conftest import PROJECT_CALL, PYTHON, PYTHON_FUNCTIONS, FakeClient, run, scripted
+from tests.conftest import PROJECT_CALLS, PYTHON, PYTHON_FUNCTIONS, FakeClient, run, scripted
 
 pytestmark = pytest.mark.unit
 
@@ -43,14 +43,14 @@ def test_check_prints_findings_and_fails_on_errors(
     assert run("check", str(tmp_path)) == 1
     out = capsys.readouterr().out
     assert "app.py:5:9: error [unit_mismatch]" in out
-    assert len(client.calls) == PYTHON_FUNCTIONS + PROJECT_CALL
+    assert len(client.calls) == PYTHON_FUNCTIONS + PROJECT_CALLS
 
 
 def test_check_passes_when_nothing_fires(tmp_path: Path, client: FakeClient) -> None:
     """Check passes when nothing fires."""
     _ = (tmp_path / "clean.py").write_text("def total(items):\n    return sum(items)\n")
     assert run("check", str(tmp_path / "clean.py")) == 0
-    assert len(client.calls) == 1 + PROJECT_CALL
+    assert len(client.calls) == 1 + PROJECT_CALLS
 
 
 def test_check_hides_probability_when_configured(
@@ -201,7 +201,7 @@ def test_review_labels_each_sampled_function(
     assert run("review", "unit_mismatch") == 0
     labels = stored(tmp_path).query(tuple[int], "SELECT real FROM labels ORDER BY real")
     assert labels == [(0,), (1,)]
-    assert len(client.calls) == PYTHON_FUNCTIONS + PROJECT_CALL
+    assert len(client.calls) == PYTHON_FUNCTIONS + PROJECT_CALLS
 
 
 def test_review_skips_and_quits(

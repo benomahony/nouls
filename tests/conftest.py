@@ -31,7 +31,7 @@ def total(items: list[int]) -> int:
     return sum(items)
 """
 PYTHON_FUNCTIONS = 2
-PROJECT_CALL = 1
+PROJECT_CALLS = 2  # The project question, and one for the strict pyproject's only setting.
 
 APP = Path("src/app.py")
 
@@ -105,11 +105,15 @@ class FakeClient:
         self.calls.append(Call(state, set(questions), model))
         files = state.get("files")
         function = state.get("function")
+        line = state.get("line")
+        setting = state.get("setting")
         flagged: set[str] = set()
         if isinstance(files, dict):
             texts = cast("dict[str, str]", files).values()
             if not any("strict" in text for text in texts):
-                flagged.add("relaxed_warnings")
+                flagged.add("unscheduled_static_analysis")
+        elif isinstance(line, str) and "ignore" in f"{setting} {line}":
+            flagged.add("relaxed_warnings")
         elif isinstance(function, str) and "* 1000" in function:
             flagged.add("unit_mismatch")
         return Response(

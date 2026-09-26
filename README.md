@@ -25,7 +25,7 @@ The default rules target intent, not syntax:
 
 Anything ruff, a type checker or a security scanner already catches is deliberately out of scope.
 
-Two project rules read the project's build, lint and CI configuration as a whole, and check that it follows rule 10 of NASA's [Power of Ten](https://spinroot.com/gerard/pdf/P10.pdf): all code compiles with every warning enabled at the most pedantic setting and no warnings, and at least one strong static analyser checks it at least daily with zero warnings.
+Two rules read the project's build, lint and CI configuration and check that it follows rule 10 of NASA's [Power of Ten](https://spinroot.com/gerard/pdf/P10.pdf): all code compiles with every warning enabled at the most pedantic setting and no warnings, and at least one strong static analyser checks it at least daily with zero warnings. `relaxed_warnings` asks about every line of those files on its own, so each ignored rule, skipped check, excluded file, loosened threshold or step allowed to fail is its own finding on its own line. `unscheduled_static_analysis` asks once about the files together, because a missing analyser is not on any line.
 
 | Rule | Severity |
 | --- | --- |
@@ -150,7 +150,7 @@ rules:
 
 `files` limits a rule to file names or paths matching any of its globs. Setting it replaces the default list.
 
-`scope: project` asks a rule once about the whole project instead of once per function. Its `files` are globs relative to the project root, the nearest directory above the target with a `.git` or nouls config, and they are read even when `exclude` would skip them. Every matching file is sent together, and the finding sits on line 1 of the first match in the order the globs are listed. The language server checks project rules when you open or save one of their files.
+`scope: project` asks a rule once about the whole project instead of once per function, and `scope: setting` asks it once about every line of the matching files that sets something, skipping comments, headers and lines that only open a block. Their `files` are globs relative to the project root, the nearest directory above the target with a `.git` or nouls config, and they are read even when `exclude` would skip them. A project finding sits on line 1 of the first match in the order the globs are listed, and a setting finding on its own line. The language server checks both when you open or save one of their files, and `nouls label` takes the setting's line.
 
 nouls detects each file's language from its name, using [tree-sitter-language-pack](https://github.com/Goldziher/tree-sitter-language-pack), and finds functions with the grammar's tags query, so any language whose grammar marks functions works without configuration. Files in languages without function tags, such as Markdown, YAML and plain text, are skipped. A `languages` entry only adds what detection cannot know: `extensions` maps extra file endings to the language, and `units` lists the node types to send as individual questions, replacing the tags query where it misses functions, as it does for C, C++, JavaScript and TypeScript. The diagnostic sits on the node's `name` field, or its first line when it has none. `attached` lists wrapper or preceding sibling node types, such as decorators, that belong to a unit. `calls` makes calls with a matching callee name into units, but only in files matching `test_files`.
 
@@ -166,6 +166,12 @@ Project rules are answered against the matching files, keyed by path relative to
 
 ```json
 {"files": {"pyproject.toml": "<contents>", ".github/workflows/ci.yml": "<contents>"}}
+```
+
+Setting rules are answered against one line, with the keys it sits under in TOML, YAML and JSON files:
+
+```json
+{"file": "pyproject.toml", "setting": "tool.ruff.lint.ignore", "line": "\"E501\","}
 ```
 
 Write each `message` in plain language, say precisely what is wrong, then suggest how to fix it. The reader may be a user, a developer or an agent, so name the exact command, setting or code to change.

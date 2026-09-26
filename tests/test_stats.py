@@ -9,7 +9,7 @@ import pytest
 from nouls.output import USAGE_ERROR
 from nouls.stats import display, percent, sparkline
 from nouls.store import Store, default_path
-from tests.conftest import PROJECT_CALL, PYTHON, PYTHON_FUNCTIONS, FakeClient, run
+from tests.conftest import PROJECT_CALLS, PYTHON, PYTHON_FUNCTIONS, FakeClient, run
 
 pytestmark = pytest.mark.unit
 
@@ -63,7 +63,7 @@ def test_cost_counts_cache_hits(client: FakeClient, capsys: pytest.CaptureFixtur
     row = next(line for line in capsys.readouterr().out.splitlines() if "│ 20" in line)
     assert "50%" in row
     assert "$0.0030" in row
-    assert len(client.calls) == PYTHON_FUNCTIONS + PROJECT_CALL
+    assert len(client.calls) == PYTHON_FUNCTIONS + PROJECT_CALLS
 
 
 @pytest.mark.usefixtures("checked")

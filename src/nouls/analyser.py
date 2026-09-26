@@ -1,6 +1,6 @@
 # Copyright 2026 Ben O'Mahony
 # SPDX-License-Identifier: MIT
-"""Ask each rule's question about functions and projects, and turn answers into findings."""
+"""Ask each rule's question about functions, projects and settings, and report what fires."""
 
 import asyncio
 import json
@@ -11,10 +11,12 @@ from typing import cast
 from typesafe_sdk import AsyncTypeSafeClient, Noul
 
 from nouls.config import Config, Rule, Severity, project_files
+from nouls.settings import settings_in
 from nouls.store import DIGEST_LENGTH, Observation, RunStats, Store, digest
 from nouls.units import Span, extract_units
 
 PROJECT = "project"
+SETTING = "setting"
 
 
 @dataclass(frozen=True)
@@ -46,6 +48,16 @@ class Finding:
         )
         assert text.startswith(self.message), "Description must lead with the message"
         return text
+
+
+@dataclass(frozen=True)
+class Target:
+    """What a batch of answers is about: a function, a project or a setting."""
+
+    name: str
+    line: int
+    span: Span
+    unit_hash: str
 
 
 @dataclass
@@ -111,11 +123,13 @@ def state_for(language: str, source: str) -> dict[str, str | dict[str, str]]:
 
     """
     assert source, "state_for needs source text; pass the unit or project source that was hashed"
-    state: dict[str, str | dict[str, str]] = (
-        {"files": cast("dict[str, str]", json.loads(source))}
-        if language == PROJECT
-        else {"language": language, "function": source}
-    )
+    state: dict[str, str | dict[str, str]]
+    if language == PROJECT:
+        state = {"files": cast("dict[str, str]", json.loads(source))}
+    elif language == SETTING:
+        state = dict(cast("dict[str, str]", json.loads(source)))
+    else:
+        state = {"language": language, "function": source}
     assert state, "state_for built an empty state; both branches must set at least one key"
     return state
 
@@ -242,26 +256,10 @@ class Analyser:
         observations: list[Observation] = []
         findings: list[Finding] = []
         for unit, uhash, result in zip(units, hashes, results, strict=True):
-            for name, probability in result.probabilities.items():
-                rule = rules[name]
-                threshold = self.threshold(rule)
-                fired = probability >= threshold and labels.get((name, uhash)) is not False
-                observations.append(
-                    Observation(
-                        name,
-                        uhash,
-                        unit.name,
-                        unit.first_line,
-                        question_hash(rule),
-                        probability,
-                        threshold,
-                        fired,
-                    )
-                )
-                if fired:
-                    findings.append(
-                        Finding(name, rule.message, rule.severity, probability, unit.span, uhash)
-                    )
+            target = Target(unit.name, unit.first_line, unit.span, uhash)
+            observed, fired = self.judge(target, result, rules, labels)
+            observations += observed
+            findings += fired
         self.record(path, language, observations, results)
         assert len(observations) == len(units) * len(rules), "Every rule must be observed per unit"
         return findings
@@ -277,7 +275,7 @@ class Analyser:
 
         """
         groups: dict[tuple[str, ...], dict[str, Rule]] = {}
-        for name, rule in self.config.project_rules().items():
+        for name, rule in self.config.scoped_rules("project").items():
             assert rule.files, f"Project rule {name} has no files; the Rule validator must catch it"
             groups.setdefault(tuple(rule.files), {})[name] = rule
         findings: list[tuple[Path, Finding]] = []
@@ -291,29 +289,113 @@ class Analyser:
             labels = self.store.labels([uhash])
             observations, results = recorded.setdefault(anchor, ([], []))
             results.append(result)
-            for name, probability in result.probabilities.items():
-                rule = rules[name]
-                threshold = self.threshold(rule)
-                fired = probability >= threshold and labels.get((name, uhash)) is not False
-                observations.append(
-                    Observation(
-                        name, uhash, PROJECT, 0, question_hash(rule), probability, threshold, fired
-                    )
-                )
-                if fired:
-                    span = Span(0, 0, 0, 0)
-                    findings.append(
-                        (
-                            anchor,
-                            Finding(name, rule.message, rule.severity, probability, span, uhash),
-                        )
-                    )
+            target = Target(PROJECT, 0, Span(0, 0, 0, 0), uhash)
+            observed, fired = self.judge(target, result, rules, labels)
+            observations += observed
+            findings += [(anchor, finding) for finding in fired]
         for anchor, (observations, results) in recorded.items():
             self.record(anchor, PROJECT, observations, results)
         assert all(finding.unit_hash for _, finding in findings), (
             "A project finding has no unit hash, so it cannot be labelled; set it from the source"
         )
         return findings
+
+    async def analyse_settings(self, root: Path) -> list[tuple[Path, Finding]]:
+        """Check every line of the files that setting rules read.
+
+        Args:
+            root: The project root that setting rule globs are relative to.
+
+        Returns:
+            Each finding with the file it belongs on, at the setting's line.
+
+        """
+        rules = self.config.scoped_rules(SETTING)
+        paths = {
+            path: None
+            for rule in rules.values()
+            for path in await asyncio.to_thread(project_files, root, rule.files or [])
+        }
+        findings: list[tuple[Path, Finding]] = []
+        for path in paths:
+            applying = {
+                name: rule
+                for name, rule in rules.items()
+                if path in project_files(root, rule.files or [])
+            }
+            settings = await asyncio.to_thread(settings_in, root, path)
+            sources = [setting.source() for setting in settings]
+            hashes = [unit_hash(SETTING, source) for source in sources]
+            self.store.save_units(SETTING, list(zip(hashes, sources, strict=True)))
+            results = await asyncio.gather(*(self.ask(SETTING, s, applying) for s in sources))
+            labels = self.store.labels(hashes)
+            observations: list[Observation] = []
+            for setting, uhash, result in zip(settings, hashes, results, strict=True):
+                target = Target(
+                    setting.keys or setting.text, setting.span.line, setting.span, uhash
+                )
+                observed, fired = self.judge(target, result, applying, labels)
+                observations += observed
+                findings += [(path, finding) for finding in fired]
+            self.record(path, SETTING, observations, list(results))
+        assert all(path in paths for path, _ in findings), "Findings belong to checked files"
+        assert all(f.span.line >= 0 for _, f in findings), "Setting findings sit on a line"
+        return findings
+
+    def judge(
+        self,
+        target: Target,
+        result: Asked,
+        rules: dict[str, Rule],
+        labels: dict[tuple[str, str], bool],
+    ) -> tuple[list[Observation], list[Finding]]:
+        """Decide which rules fire on one target.
+
+        A rule fires when its probability reaches its threshold, unless the target is labelled
+        false for that rule.
+
+        Args:
+            target: The function, project or setting the answers are about.
+            result: The answers, one probability per rule.
+            rules: The rules that were asked, by name.
+            labels: Verdicts by rule and unit hash.
+
+        Returns:
+            One observation per rule, and a finding for each rule that fired.
+
+        """
+        assert set(result.probabilities) == set(rules), "judge needs an answer for every rule"
+        observations: list[Observation] = []
+        findings: list[Finding] = []
+        for name, probability in result.probabilities.items():
+            rule = rules[name]
+            threshold = self.threshold(rule)
+            fired = probability >= threshold and labels.get((name, target.unit_hash)) is not False
+            observations.append(
+                Observation(
+                    name,
+                    target.unit_hash,
+                    target.name,
+                    target.line,
+                    question_hash(rule),
+                    probability,
+                    threshold,
+                    fired,
+                )
+            )
+            if fired:
+                findings.append(
+                    Finding(
+                        name,
+                        rule.message,
+                        rule.severity,
+                        probability,
+                        target.span,
+                        target.unit_hash,
+                    )
+                )
+        assert len(findings) <= len(observations), "A rule fires at most once per target"
+        return observations, findings
 
     def record(
         self, path: Path, language: str, observations: list[Observation], results: list[Asked]

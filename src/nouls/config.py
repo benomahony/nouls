@@ -21,7 +21,7 @@ from nouls.store import default_path
 CONFIG_NAMES = ("nouls.yaml", "nouls.yml", ".nouls.yaml", ".nouls.yml")
 
 Severity = Literal["error", "warning", "info", "hint"]
-Scope = Literal["function", "project"]
+Scope = Literal["function", "project", "setting"]
 type Tree = dict[str, object]
 TAG_KINDS = ("definition.function", "definition.method")
 
@@ -50,12 +50,12 @@ class Language(BaseModel):
 
 
 class MissingProjectFilesError(ValueError):
-    """A rule with scope: project lists no files to read."""
+    """A rule with scope: project or setting lists no files to read."""
 
     def __init__(self) -> None:
         """Explain that the rule needs files and how to add them."""
         super().__init__(
-            "a rule with scope: project has no files, so there is nothing to read; "
+            "a rule with scope: project or setting has no files, so there is nothing to read; "
             "add files with globs relative to the project root, such as [pyproject.toml]"
         )
         assert self.args, "The error must carry its message for pydantic to show"
@@ -76,22 +76,22 @@ class Rule(BaseModel):
 
     @model_validator(mode="after")
     def project_rules_name_their_files(self) -> "Rule":
-        """Reject project rules that have no files to read.
+        """Reject project and setting rules that have no files to read.
 
         Returns:
             The rule, unchanged.
 
         Raises:
-            MissingProjectFilesError: When ``scope`` is ``project`` and ``files`` is empty.
+            MissingProjectFilesError: When ``scope`` is not ``function`` and ``files`` is empty.
 
         """
-        assert self.scope in {"function", "project"}, (
-            f"Rule scope is {self.scope!r}; pydantic must restrict it to function or project"
+        assert self.scope in {"function", "project", "setting"}, (
+            f"Rule scope is {self.scope!r}; pydantic must restrict it to the Scope literal"
         )
-        if self.scope == "project" and not self.files:
+        if self.scope != "function" and not self.files:
             raise MissingProjectFilesError
         assert self.scope == "function" or self.files, (
-            "A project rule passed validation without files; the check above must raise first"
+            "A project or setting rule passed validation without files; the check must raise first"
         )
         return self
 
@@ -206,25 +206,40 @@ class Config(BaseModel):
         )
         return selected
 
-    def project_rules(self) -> dict[str, Rule]:
-        """Select the enabled project rules.
+    def scoped_rules(self, scope: Scope) -> dict[str, Rule]:
+        """Select the enabled rules with one scope.
+
+        Args:
+            scope: ``project`` or ``setting``; function rules come from rules_for.
 
         Returns:
-            Every enabled rule with scope: project, by name.
+            Every enabled rule with that scope, by name.
 
         """
+        assert scope != "function", "Select function rules with rules_for, which checks languages"
         selected = {
-            name: rule
-            for name, rule in self.rules.items()
-            if rule.enabled and rule.scope == "project"
+            name: rule for name, rule in self.rules.items() if rule.enabled and rule.scope == scope
         }
         assert all(rule.files for rule in selected.values()), (
-            "A project rule has no files; Rule's validator must reject scope: project without files"
-        )
-        assert all(rule.enabled for rule in selected.values()), (
-            "project_rules selected a disabled rule; the filter must check rule.enabled"
+            f"A {scope} rule has no files; Rule's validator must reject it"
         )
         return selected
+
+    def file_patterns(self) -> list[list[str]]:
+        """List the file globs of every enabled project and setting rule.
+
+        Returns:
+            Each rule's globs, relative to the project root.
+
+        """
+        found = [
+            rule.files or []
+            for scope in ("project", "setting")
+            for rule in self.scoped_rules(scope).values()
+        ]
+        assert all(found), "Project and setting rules always have files"
+        assert len(found) <= len(self.rules), "Each rule gives at most one list of globs"
+        return found
 
     def unknown_rule(self, rule: str) -> str:
         """Explain that a rule name does not exist.

@@ -15,10 +15,11 @@ from rich.syntax import Syntax
 from rich.table import Table
 from typesafe_sdk import AsyncTypeSafeClient
 
-from nouls.analyser import PROJECT, Analyser, Finding, project_source, unit_hash
+from nouls.analyser import PROJECT, SETTING, Analyser, Finding, project_source, unit_hash
 from nouls.config import Config, Rule, Severity, find_root, load_config
 from nouls.output import fail, say
 from nouls.server import server
+from nouls.settings import settings_in
 from nouls.stats import SAMPLE, SampleRow, display, stats
 from nouls.store import Store
 from nouls.units import extract_units
@@ -162,6 +163,7 @@ async def run_check(paths: list[Path], config: Config, root: Path) -> int:
             )
         )
         project = await analyser.analyse_project(root)
+        project += await analyser.analyse_settings(root)
     assert len(results) == len(files), "Every file must have results"
     findings = [
         (path, finding)
@@ -211,8 +213,8 @@ def rule_fields(loaded: Config, rule: Rule) -> tuple[Severity, float, str]:
     """
     assert rule.enabled, "Only enabled rules are describable"
     scope = ", ".join(rule.languages) if rule.languages else "all languages"
-    if rule.scope == "project":
-        scope = "project"
+    if rule.scope != "function":
+        scope = {"project": "project", "setting": "each setting"}[rule.scope]
     if rule.files:
         scope += f" in {len(rule.files)} file patterns"
     threshold = loaded.threshold if rule.threshold is None else rule.threshold
@@ -288,18 +290,40 @@ def label(
     *,
     config: ConfigOption = None,
 ) -> int:
-    """Record whether a rule's finding on the function at PATH:LINE is a real problem.
+    """Record whether a rule's finding at PATH:LINE is a real problem.
 
     Returns:
         0 when the label was saved, or 2 for a usage error.
 
     """
+    assert path.name, f"label needs a file path but got {path!r}"
     loaded = load_config(path.parent, config)
-    language = loaded.language_for(path)
     if rule not in loaded.rules:
         return fail(loaded.unknown_rule(rule))
-    if loaded.rules[rule].scope == "project":
+    scope = loaded.rules[rule].scope
+    assert scope in {"function", "project", "setting"}, f"Unknown rule scope {scope!r}"
+    if scope == "project":
         return label_project(loaded, path, rule, verdict)
+    if scope == "setting":
+        return label_setting(loaded, path, line, rule, verdict)
+    return label_function(loaded, path, line, rule, verdict)
+
+
+def label_function(loaded: Config, path: Path, line: int, rule: str, verdict: str) -> int:
+    """Record a verdict on a function rule's finding.
+
+    Args:
+        loaded: The loaded configuration.
+        path: The source file.
+        line: A one based line inside the function.
+        rule: A function rule.
+        verdict: ``real`` or ``false``.
+
+    Returns:
+        0 when the label was saved, or the usage error code.
+
+    """
+    language = loaded.language_for(path)
     if language is None:
         return fail(loaded.unsupported(path))
     if not path.is_file():
@@ -355,6 +379,42 @@ def label_project(loaded: Config, path: Path, rule: str, verdict: str) -> int:
     Store(loaded.store_path()).label(rule, unit_hash(PROJECT, source), real=verdict == "real")
     assert verdict in {"real", "false"}, f"verdict must be real or false but got {verdict}"
     say(f"Labelled {rule} on the project at {display(str(root))} as {verdict}")
+    return 0
+
+
+def label_setting(loaded: Config, path: Path, line: int, rule: str, verdict: str) -> int:
+    """Record a verdict on a setting rule's finding.
+
+    Args:
+        loaded: The loaded configuration.
+        path: The configuration file.
+        line: The one based line of the setting.
+        rule: A rule with scope: setting.
+        verdict: ``real`` or ``false``.
+
+    Returns:
+        0 when the label was saved, or the usage error code.
+
+    """
+    assert loaded.rules[rule].scope == "setting", f"{rule} must be a setting rule"
+    assert verdict in {"real", "false"}, f"verdict must be real or false but got {verdict}"
+    if not path.is_file():
+        return fail(
+            f"nouls: cannot label {path} because it does not exist. "
+            "Use the path exactly as nouls check printed it."
+        )
+    resolved = path.resolve()
+    root = find_root(resolved.parent)
+    found = [s for s in settings_in(root, resolved) if s.span.line == line - 1]
+    if not found:
+        return fail(
+            f"nouls: line {line} of {path} does not set anything, so there is no finding there "
+            "to label. Use the line number nouls check printed for the finding."
+        )
+    Store(loaded.store_path()).label(
+        rule, unit_hash(SETTING, found[0].source()), real=verdict == "real"
+    )
+    say(f"Labelled {rule} on {path}:{line} as {verdict}")
     return 0
 
 

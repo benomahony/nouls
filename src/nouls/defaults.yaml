@@ -146,10 +146,11 @@ rules:
     message: This function mixes high level steps with low level detail such as parsing or raw SQL. Move the low level detail into well named helper functions
     severity: info
   relaxed_warnings:
-    scope: project
-    question: Do these project files leave compiler or linter warnings disabled, relaxed or allowed to pass, instead of enabling every warning at the strictest setting and failing on any warning?
-    message: The project turns some compiler or linter warnings off, relaxes them or lets them pass. Enable every warning at the strictest setting, such as ruff select ALL or clippy pedantic, and make any warning fail the build
+    scope: setting
+    question: Does this line of a project configuration file weaken a compiler, linter, type checker, static analyser, test or coverage check, for example by disabling or ignoring a rule, excluding or omitting files, choosing a mode below the strictest available, setting a confidence or severity threshold that hides findings, or letting a failing step or warning pass?
+    message: This setting weakens a compiler, linter, type checker or other check. Remove it, or enable the check at its strictest setting and fix what it reports
     severity: warning
+    threshold: 0.6
     files: &project_files
       - pyproject.toml
       - setup.cfg
