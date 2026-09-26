@@ -47,26 +47,39 @@ async def list_resources() -> list[Resource]:
 async def read_resource(uri) -> str:  # type: ignore[no-untyped-def]
     """Read documentation content."""
     uri_str = str(uri)
-    assert uri_str is not None, "URI must not be None"
-    assert uri_str.startswith("doc://nouls/"), "URI must be for this package"
+    assert uri_str is not None, "read_resource needs a URI; use one from list_resources"
+    assert uri_str.startswith("doc://nouls/"), (
+        f"{uri_str} is not a nouls documentation URI; use one from list_resources, "
+        "which all start with doc://nouls/"
+    )
 
     path = uri_str.replace("doc://nouls/", "")
     docs_dir = Path(__file__).parent.parent.parent / "docs"
     doc_file = docs_dir / path
 
-    assert doc_file.exists(), f"Documentation file {path} not found"
-    assert doc_file.is_relative_to(docs_dir), "Path must be within docs directory"
+    assert doc_file.exists(), (
+        f"There is no nouls documentation page called {path}; use a URI from list_resources"
+    )
+    assert doc_file.is_relative_to(docs_dir), (
+        f"{path} points outside the nouls docs directory; use a URI from list_resources"
+    )
 
     return doc_file.read_text()
 
 
 async def main() -> None:
     """Run MCP server via stdio."""
-    assert app is not None, "Server must be initialized"
+    assert app is not None, (
+        "The MCP app was not created at import; keep app = Server(...) at module level"
+    )
 
     async with stdio_server() as (read_stream, write_stream):
-        assert read_stream is not None, "Read stream must not be None"
-        assert write_stream is not None, "Write stream must not be None"
+        assert read_stream is not None, (
+            "stdio_server gave no read stream; run this server with --transport stdio"
+        )
+        assert write_stream is not None, (
+            "stdio_server gave no write stream; run this server with --transport stdio"
+        )
         await app.run(read_stream, write_stream, app.create_initialization_options())
 
 

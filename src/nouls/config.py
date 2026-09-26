@@ -1,3 +1,4 @@
+from difflib import get_close_matches
 from fnmatch import fnmatch
 from importlib.resources import files
 from pathlib import Path
@@ -66,12 +67,18 @@ class Config(BaseModel):
         )
 
     def is_test(self, path: Path) -> bool:
-        assert path.name, "Path must name a file"
-        assert all(self.test_files), "Test file patterns must not be empty"
+        assert path.name, f"is_test needs a file path but got {path!r}; pass a source file path"
+        assert all(self.test_files), (
+            "test_files contains a blank pattern, which would match nothing; "
+            "remove the empty entry from test_files in your nouls config"
+        )
         return matches(path, self.test_files)
 
     def rules_for(self, language: str, path: Path) -> dict[str, Rule]:
-        assert language in self.languages, "Language must be configured"
+        assert language in self.languages, (
+            f"No language called {language!r} is configured; get the name from language_for(path) "
+            f"or add {language} under languages in your nouls config"
+        )
         selected = {
             name: rule
             for name, rule in self.rules.items()
@@ -79,8 +86,27 @@ class Config(BaseModel):
             and (rule.languages is None or language in rule.languages)
             and (rule.files is None or matches(path, rule.files))
         }
-        assert all(rule.enabled for rule in selected.values()), "Only enabled rules may apply"
+        assert all(rule.enabled for rule in selected.values()), (
+            "rules_for selected a disabled rule; the filter above must check rule.enabled"
+        )
         return selected
+
+    def unknown_rule(self, rule: str) -> str:
+        assert rule, "unknown_rule needs the rule name the user typed; pass it through unchanged"
+        assert rule not in self.rules, "Only an unconfigured rule is unknown"
+        close = get_close_matches(rule, self.rules, n=1)
+        hint = f"Did you mean {close[0]}? " if close else ""
+        return f"nouls: there is no rule called {rule}. {hint}Run nouls rules to list every rule."
+
+    def unsupported(self, path: Path) -> str:
+        assert path.name, f"unsupported needs a file path but got {path!r}; pass the file to label"
+        assert self.language_for(path) is None, "Only a file with no language is unsupported"
+        extensions = sorted({ext for lang in self.languages.values() for ext in lang.extensions})
+        return (
+            f"nouls: {path} has no configured language, so it has no functions to lint. "
+            f"Choose a file ending in {', '.join(extensions)}, "
+            f"or add {path.suffix or 'its extension'} to a language in your nouls config."
+        )
 
     def excluded(self, path: Path) -> bool:
         assert not path.is_absolute(), "Exclusion applies to paths relative to the search root"
@@ -123,10 +149,16 @@ def find_config(start: Path) -> Path | None:
 
 def load_config(start: Path, explicit: Path | None = None) -> Config:
     data = yaml.safe_load(files("nouls").joinpath("defaults.yaml").read_text())
-    assert "rules" in data, "Defaults must define rules"
+    assert "rules" in data, (
+        "nouls's built in defaults.yaml has no rules section, so the package is broken; "
+        "restore src/nouls/defaults.yaml or reinstall nouls"
+    )
     path = explicit or find_config(start.resolve())
     if path is not None:
         data = merge(data, yaml.safe_load(path.read_text()) or {})
     config = Config.model_validate(data)
-    assert config.languages, "Config must define at least one language"
+    assert config.languages, (
+        f"{path or 'defaults.yaml'} leaves no languages configured, so nouls has nothing to lint; "
+        "add at least one entry under languages"
+    )
     return config

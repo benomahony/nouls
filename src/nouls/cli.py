@@ -129,7 +129,11 @@ def check(*paths: Path, config: ConfigOption = None) -> int:
     targets = list(paths) or [Path.cwd()]
     missing = [target for target in targets if not target.exists()]
     if missing:
-        print(f"nouls: no such file or directory: {missing[0]}", file=sys.stderr)
+        print(
+            f"nouls: cannot check {', '.join(map(str, missing))} because it does not exist. "
+            "Fix the path, or run nouls check with no paths to lint the current directory.",
+            file=sys.stderr,
+        )
         return 2
     assert targets, "At least one target must be checked"
     root = targets[0] if targets[0].is_dir() else targets[0].parent
@@ -155,16 +159,27 @@ def describe_rule(loaded: Config, name: str, rule: Rule) -> str:
 
 
 @app.command
-def rules(config: ConfigOption = None) -> None:
+def rules(config: ConfigOption = None) -> int:
     """List the rules that are enabled for this project."""
     loaded = load_config(Path.cwd(), config)
-    assert loaded.rules, "Config must define rules"
+    assert loaded.rules, (
+        "The loaded config has no rules, so defaults.yaml was not merged in; "
+        "load it with load_config, which always starts from the defaults"
+    )
     enabled = {name: rule for name, rule in loaded.rules.items() if rule.enabled}
-    assert enabled, "At least one rule must be enabled to list"
+    if not enabled:
+        sys.stderr.write(
+            "nouls: every rule is disabled in your nouls config, so there is nothing to list. "
+            "Set enabled: true on the rules you want, or remove enabled: false from them.\n"
+        )
+        return 2
+    assert all(rule.enabled for rule in enabled.values()), (
+        "rules is about to list a disabled rule; filter enabled on rule.enabled"
+    )
     if not console.is_terminal:
         for name, rule in enabled.items():
             console.print(describe_rule(loaded, name, rule), soft_wrap=True)
-        return
+        return 0
     table = Table(show_lines=True, expand=True)
     table.add_column("Rule", style="bold", no_wrap=True)
     table.add_column("Severity", no_wrap=True)
@@ -177,6 +192,7 @@ def rules(config: ConfigOption = None) -> None:
         )
         table.add_row(name, f"[{style}]{severity}[/{style}] {threshold:.0%}", question)
     console.print(table)
+    return 0
 
 
 @app.command
@@ -191,8 +207,18 @@ def label(
     """Record whether a rule's finding on the function at PATH:LINE is a real problem."""
     loaded = load_config(path.parent, config)
     language = loaded.language_for(path)
-    if language is None or rule not in loaded.rules:
-        print(f"nouls: no language for {path} or unknown rule {rule}", file=sys.stderr)
+    if rule not in loaded.rules:
+        print(loaded.unknown_rule(rule), file=sys.stderr)
+        return 2
+    if language is None:
+        print(loaded.unsupported(path), file=sys.stderr)
+        return 2
+    if not path.is_file():
+        print(
+            f"nouls: cannot label {path} because it does not exist. "
+            "Use the path exactly as nouls check printed it.",
+            file=sys.stderr,
+        )
         return 2
     units = [
         u
@@ -200,7 +226,12 @@ def label(
         if u.contains(line - 1)
     ]
     if not units:
-        print(f"nouls: no function contains {path}:{line}", file=sys.stderr)
+        print(
+            f"nouls: line {line} of {path} is outside every function, "
+            "so there is no finding there to label. "
+            "Use the line number nouls check printed for the finding.",
+            file=sys.stderr,
+        )
         return 2
     unit = min(units, key=lambda u: u.last_line - u.first_line)
     assert unit.contains(line - 1), "Chosen function must contain the line"
@@ -215,7 +246,7 @@ def review(rule: str, *, limit: Positive = 20, config: ConfigOption = None) -> i
     """Label unlabelled functions for RULE, sampled evenly across probability bands."""
     loaded = load_config(Path.cwd(), config)
     if rule not in loaded.rules:
-        print(f"nouls: unknown rule {rule}, see nouls rules", file=sys.stderr)
+        print(loaded.unknown_rule(rule), file=sys.stderr)
         return 2
     assert limit > 0, "Sample size must be positive"
     store = Store(loaded.store_path())
@@ -225,8 +256,10 @@ def review(rule: str, *, limit: Positive = 20, config: ConfigOption = None) -> i
     ):
         if not 0.0 <= probability <= 1.0:
             print(
-                f"nouls: skipping {name} at {display(path)}:{line + 1}: "
-                f"corrupt stored probability {probability}",
+                f"nouls: skipping {name} at {display(path)}:{line + 1} because its stored "
+                f"probability {probability} is outside 0 to 1, so the cache is corrupt. "
+                f"Run nouls check {display(path)} to record it again. If it stays corrupt, "
+                f"delete {loaded.store_path()}, which also deletes your labels.",
                 file=sys.stderr,
             )
             continue

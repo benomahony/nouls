@@ -55,7 +55,7 @@ def test_cost_counts_cache_hits(
     run("stats", "cost", "--price-per-million", "1")
     row = next(line for line in capsys.readouterr().out.splitlines() if "│ 20" in line)
     assert "50%" in row
-    assert "$0.0022" in row
+    assert "$0.0028" in row
     assert len(client.calls) == 2
 
 
@@ -83,7 +83,7 @@ def test_thresholds_asks_reworded_questions(
 
 def test_thresholds_rejects_unknown_rules(capsys: pytest.CaptureFixture[str]) -> None:
     assert run("stats", "thresholds", "made_up") == 2
-    assert "unknown rule made_up" in capsys.readouterr().err
+    assert "there is no rule called made_up" in capsys.readouterr().err
 
 
 def test_helpers_format_values(tmp_path: Path) -> None:

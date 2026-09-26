@@ -112,115 +112,127 @@ languages:
 rules:
   name_behaviour_mismatch:
     question: Does the function's name describe something materially different from what its body actually does?
-    message: Function name does not match what the function does
+    message: The function's name says it does something different from what its body does. Rename it to describe what it does, or change the body to do what the name says
     severity: warning
   docstring_drift:
     question: Does the function's docstring or any comment inside it describe behaviour that the code does not implement?
-    message: Docstring or comment has drifted from the implementation
+    message: A docstring or comment describes behaviour the code does not have. Update the comment to match the code, or fix the code if the comment is right
     severity: warning
   query_with_side_effect:
     question: Is the function named like a query or predicate, such as get, is, has or find, while it also modifies state, writes to storage or sends messages?
-    message: Query style function has side effects
+    message: This function is named like a read-only query but it also changes state. Rename it to say what it changes, or move the change into a separate function
     severity: warning
   partial_failure:
     question: Does the function perform several writes or external calls in sequence so that a failure partway through would leave data inconsistent, with no transaction, rollback or compensation?
-    message: A failure partway through leaves inconsistent state
+    message: If one of these steps fails, the earlier ones stay done and the data is left half updated. Wrap the steps in a transaction, or undo the earlier steps when a later one fails
     severity: warning
   check_then_act:
     question: Does the function check a condition on shared or external state and then act on it, where that state could change between the check and the action?
-    message: Check then act on state that can change in between
+    message: The state checked here can change before the code acts on it. Make the check and the action one atomic operation, for example with a lock or a conditional write
     severity: warning
   non_idempotent_retry:
     question: Does the function retry an operation that is not idempotent, so that a retry could apply its effect twice?
-    message: Retrying an operation that is not idempotent
+    message: This retries an operation that is not safe to repeat, so a retry can apply it twice. Make the operation idempotent, for example with an idempotency key, or stop retrying it
     severity: error
   unit_mismatch:
     question: Does the function combine or compare quantities in different units, such as seconds and milliseconds or pence and pounds, without converting between them?
-    message: Quantities in different units are mixed without conversion
+    message: Values in different units, such as seconds and milliseconds, are combined without converting. Convert them to one unit first, and put the unit in the variable names
     severity: error
   boundary_error:
     question: Does the function's boundary logic contradict its evident intent, such as an off by one range, an inclusive check that should be exclusive, or a comparison in the wrong direction?
-    message: Boundary logic contradicts the evident intent
+    message: A range limit or comparison looks wrong for what the code is trying to do, such as an off by one or a flipped comparison. Check the edge values and add a test for each boundary
     severity: error
   missing_authorisation:
     question: Does the function perform a privileged or user specific action on behalf of a caller without checking that the caller is allowed to perform it?
-    message: Privileged action without an authorisation check
+    message: This performs a privileged or user specific action without checking the caller is allowed to. Check the caller's permission before acting
     severity: warning
   misleading_error:
     question: Does the function raise or log an error message that misdescribes the failure that actually occurred?
-    message: Error message misdescribes the actual failure
+    message: An error message describes a different failure from the one that happened. Reword it to name the failure that actually occurred
+    severity: info
+  cryptic_error:
+    question: Does the function raise, assert, return or log an error message that is not in plain language, for example a bare error code, an internal identifier or jargon that the user, developer or agent reading it would not understand?
+    message: An error message uses a code, an internal name or jargon. Say what went wrong in words a user of this code would understand
+    severity: info
+  vague_error:
+    question: Does the function raise, assert, return or log an error message too vague to identify the problem, for example "something went wrong" or "invalid input" without saying which input, which value or what was expected?
+    message: An error message is too vague to find the problem. Name the input, value or resource that failed and what was expected
+    severity: info
+  unconstructive_error:
+    question: Does the function raise, assert, return or log an error message that says what failed without suggesting what the user, developer or agent reading it should do to fix it, such as the input, setting, file or code to change?
+    message: An error message says what failed but not how to fix it. Add the next step for whoever reads it, user, developer or agent, such as the command to run, setting to change or code to fix
     severity: info
   mixed_abstraction:
     question: Does the function mix high level business steps with low level mechanical detail, such as parsing, raw SQL or byte handling, in the same body?
-    message: Function mixes levels of abstraction
+    message: This function mixes high level steps with low level detail such as parsing or raw SQL. Move the low level detail into well named helper functions
     severity: info
   test_not_isolated:
     question: Is this a test case itself, not a fixture, setup or teardown hook or helper, whose result could change depending on which other tests ran before it, for example because it reads or mutates module level, class level, database or filesystem state that other tests also touch without resetting it?
-    message: Test is not isolated from other tests
+    message: This test's result can depend on which tests ran before it, because it shares state with them. Give it its own state, or reset the shared state before it runs
     severity: warning
     files: *test_files
   test_not_composable:
     question: Is this a test case itself, not a fixture, setup or teardown hook or helper, that varies several independent dimensions of behaviour at once, so they cannot be checked separately and combined, for example one test covering every combination of inputs, formats and error modes?
-    message: Test couples independent dimensions of variability
+    message: This test varies several independent things at once, so they cannot be checked separately. Split it into one test per dimension, or parametrise it
     severity: info
     files: *test_files
   test_nondeterministic:
     question: Is this a test case itself, not a fixture, setup or teardown hook or helper, whose result could change between runs with no code change, because it depends on the current time, unseeded randomness, real network calls, sleeps or timing, thread scheduling or unordered iteration?
-    message: Test result is not deterministic
+    message: This test can pass or fail without any code change because it depends on time, randomness, the network, timing or ordering. Inject a fixed clock, seed or fake, or sort before comparing
     severity: error
     files: *test_files
   test_slow:
     question: Is this a test case itself, not a fixture, setup or teardown hook or helper, that would run slowly, because it sleeps, waits on timeouts, calls real external services or databases, or loops over far more data than the behaviour needs?
-    message: Test is likely to be slow
+    message: This test is likely to be slow because it sleeps, waits, calls real services or processes more data than it needs. Replace the wait or service with a fake and shrink the data
     severity: warning
     files: *test_files
   test_hard_to_write:
     question: Is this a test case itself, not a fixture, setup or teardown hook or helper, whose setup is large or elaborate relative to the behaviour it checks, such as many mocks, long object construction or copied fixtures, suggesting the code under test is expensive to test?
-    message: Test is expensive to write relative to what it checks
+    message: This test needs a lot of setup for what it checks, which suggests the code is hard to use. Simplify the code's dependencies, or move shared setup into a small builder
     severity: info
     files: *test_files
   test_unreadable:
     question: Is this a test case itself, not a fixture, setup or teardown hook or helper, where a reader could not tell from its name and body what behaviour it checks and why, for example a vague name, unexplained magic values or no clear arrange, act and assert steps?
-    message: Test does not make its motivation clear
+    message: A reader cannot tell what behaviour this test checks or why. Name it after the behaviour, name the magic values, and separate arrange, act and assert
     severity: info
     files: *test_files
   test_not_behavioural:
     question: Is this a test case itself, not a fixture, setup or teardown hook or helper, that would still pass if the behaviour it claims to check were broken, for example because it asserts nothing, asserts only that no exception was raised, or asserts on values it set up itself?
-    message: Test is not sensitive to the behaviour it names
+    message: This test would still pass if the behaviour it names were broken. Assert on the output or effect of that behaviour
     severity: error
     files: *test_files
   test_structure_sensitive:
     question: Is this a test case itself, not a fixture, setup or teardown hook or helper, that would fail after a refactoring that keeps behaviour the same, because it asserts on private attributes, internal call order, mock call counts of internal collaborators or other implementation details?
-    message: Test is coupled to implementation structure
+    message: This test would fail after a refactor that keeps behaviour the same, because it checks internal details. Assert on public results instead of private state or internal calls
     severity: warning
     files: *test_files
   test_not_automated:
     question: Is this a test case itself, not a fixture, setup or teardown hook or helper, that needs human intervention, for example reading input, printing output for someone to inspect instead of asserting, opening a browser or depending on manual setup steps?
-    message: Test needs human intervention
+    message: This test needs a person to run or judge it. Replace manual input, printing or setup with assertions and automated fixtures
     severity: error
     files: *test_files
   test_not_specific:
     question: Is this a test case itself, not a fixture, setup or teardown hook or helper, where a failure would not point to an obvious cause, because it checks several unrelated behaviours in one test or asserts on a large opaque value without saying what matters?
-    message: A failure in this test would not point to a clear cause
+    message: If this test fails it will not be clear why, because it checks several things or one large opaque value. Split it up, or assert only on the parts that matter
     severity: warning
     files: *test_files
   test_not_predictive:
     question: Is this a test case itself, not a fixture, setup or teardown hook or helper, that could pass while the real code would fail in production, because it mocks or stubs out the very behaviour it claims to test or replaces it with a simplified fake?
-    message: Test passing does not predict production behaviour
+    message: This test mocks the behaviour it claims to check, so it can pass while the real code fails. Exercise the real code, and mock only its external dependencies
     severity: warning
     files: *test_files
   test_not_inspiring:
     question: Is this a test case itself, not a fixture, setup or teardown hook or helper, that would give a reader little confidence the code works even when it passes, because it checks something trivial or incidental, exercises the framework or language rather than the code under test, covers only the easy path of risky behaviour, or claims in its name more than it actually verifies?
-    message: Passing this test would not inspire confidence
+    message: This test checks something trivial or only the easy path, so passing it says little. Test the risky behaviour and edge cases, and make the name match what is verified
     severity: warning
     files: *test_files
   fixture_leaks_state:
     question: Is this a test fixture, setup or teardown hook or shared test helper that changes global, module, environment, filesystem or database state without restoring it afterwards, so tests that use it can affect each other?
-    message: Fixture leaves state behind for other tests
+    message: This fixture changes global, environment, file or database state and does not restore it. Restore it in teardown, or use a temporary copy
     severity: warning
     files: *test_files
   fixture_hides_behaviour:
     question: Is this a test fixture, setup hook or shared test helper that replaces, mocks or patches the real behaviour that the tests using it appear to be checking, so they pass without exercising it?
-    message: Fixture stubs out the behaviour its tests appear to check
+    message: This fixture replaces the behaviour its tests seem to check, so they pass without running it. Use the real implementation, and stub only external dependencies
     severity: warning
     files: *test_files

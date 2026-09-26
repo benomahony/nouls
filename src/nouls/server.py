@@ -35,8 +35,14 @@ class NoulsServer(LanguageServer):
             root = Path(self.workspace.root_path or Path.cwd())
             config = load_config(root)
             self._analyser = Analyser(config, AsyncTypeSafeClient(), Store(config.store_path()))
-        assert self._analyser.config.languages, "Analyser must know at least one language"
-        assert self._analyser.config.debounce_ms >= 0, "Debounce must not be negative"
+        assert self._analyser.config.languages, (
+            "The nouls config for this workspace defines no languages, so nothing can be linted; "
+            "add at least one entry under languages in nouls.yaml"
+        )
+        assert self._analyser.config.debounce_ms >= 0, (
+            f"debounce_ms is {self._analyser.config.debounce_ms}, but a delay cannot be negative; "
+            "set debounce_ms to 0 or more in nouls.yaml"
+        )
         return self._analyser
 
 
@@ -71,7 +77,12 @@ async def lint(ls: NoulsServer, uri: str) -> None:
     try:
         findings = await analyser.analyse(document.source, language, path)
     except Exception:
-        logger.exception("nouls analysis failed for %s", uri)
+        logger.exception(
+            "nouls could not analyse %s, so its diagnostics were not updated; "
+            "the traceback below gives the cause. "
+            "Check TYPESAFE_API_KEY is set and TypeSafe is reachable, then edit or save to retry.",
+            uri,
+        )
         return
     assert all(finding.unit_hash for finding in findings), "Findings must name their function"
     ls.text_document_publish_diagnostics(

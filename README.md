@@ -18,6 +18,9 @@ The default rules target intent, not syntax:
 | `unit_mismatch` | error |
 | `boundary_error` | error |
 | `misleading_error` | info |
+| `cryptic_error` | info |
+| `vague_error` | info |
+| `unconstructive_error` | info |
 | `mixed_abstraction` | info |
 
 Anything ruff, a type checker or a security scanner already catches is deliberately out of scope.
@@ -129,7 +132,7 @@ rules:
     threshold: 0.9
   ledger_sign:
     question: Does the function add a debit where the domain requires subtracting it, or the reverse?
-    message: Debit and credit signs look inverted
+    message: Debit and credit signs look inverted. Subtract debits and add credits
     severity: error
     languages: [python, go]
   test_not_isolated:
@@ -149,6 +152,8 @@ Every question is answered against this state:
 ```
 
 Write questions as a single yes/no judgement about that function.
+
+Write each `message` in plain language, say precisely what is wrong, then suggest how to fix it. The reader may be a user, a developer or an agent, so name the exact command, setting or code to change.
 
 ## Neovim
 

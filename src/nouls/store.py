@@ -72,8 +72,10 @@ def digest(*parts: str) -> str:
 
 def now() -> str:
     stamp = datetime.now(UTC).isoformat(timespec="seconds")
-    assert stamp.endswith("+00:00"), "Timestamps must be UTC"
-    assert "T" in stamp, "Timestamps must be ISO 8601"
+    assert stamp.endswith("+00:00"), (
+        f"Timestamp {stamp} is not in UTC; build it from datetime.now(UTC)"
+    )
+    assert "T" in stamp, f"Timestamp {stamp} is not ISO 8601; format it with isoformat()"
     return stamp
 
 
@@ -110,14 +112,19 @@ class Store:
     def answers(
         self, model: str, unit_hash: str, question_hashes: Sequence[str]
     ) -> dict[str, float]:
-        assert model, "Model must not be empty"
+        assert model, (
+            "answers needs a model name; set model in your nouls config, such as jev-latest"
+        )
         rows = self.db.execute(
             "SELECT question_hash, probability FROM answers WHERE model = ? AND unit_hash = ? "
             "AND question_hash IN (SELECT value FROM json_each(?))",
             (model, unit_hash, json.dumps(list(question_hashes))),
         )
         found = dict(rows.fetchall())
-        assert set(found) <= set(question_hashes), "Only requested answers may be returned"
+        assert set(found) <= set(question_hashes), (
+            "answers returned questions that were not requested; "
+            "the query must filter on the question hashes it was given"
+        )
         return found
 
     def save_answers(self, model: str, unit_hash: str, answers: dict[str, float]) -> None:

@@ -82,7 +82,10 @@ def rules(*, config: ConfigOption = None) -> None:
         """
     ):
         buckets[rule][bucket] = count
-    assert all(len(counts) == 10 for counts in buckets.values()), "Ten buckets per rule"
+    assert all(len(counts) == 10 for counts in buckets.values()), (
+        "A rule has a probability histogram without exactly 10 buckets; "
+        "the bucket expression in the query must clamp to 0..9"
+    )
     table = Table("rule", "functions", "fires", "ambiguous", "mean", "0 ▸ 1", "labels")
     for rule, n, fires, ambiguous, mean, labels in store.query(
         """
@@ -101,14 +104,17 @@ def rules(*, config: ConfigOption = None) -> None:
             sparkline(buckets[rule]),
             str(labels),
         )
-    assert table.row_count == len(buckets), "One row per observed rule"
+    assert table.row_count == len(buckets), (
+        f"The rules table has {table.row_count} rows but {len(buckets)} rules were observed; "
+        "both queries must group observations by rule"
+    )
     console.print(table)
 
 
 @stats.command
 def hotspots(*, limit: Positive = 20, config: ConfigOption = None) -> None:
     """Files and functions with the most findings."""
-    assert limit > 0, "Limit must be positive"
+    assert limit > 0, f"hotspots needs a positive --limit but got {limit}; pass 1 or more"
     _, store = open_store(config)
     files = Table("file", "findings", "functions")
     for path, fired, functions in store.query(
@@ -129,7 +135,10 @@ def hotspots(*, limit: Positive = 20, config: ConfigOption = None) -> None:
         (limit,),
     ):
         functions.add_row(name, f"{display(path)}:{line + 1}", found)
-    assert functions.row_count <= limit, "Function table must respect the limit"
+    assert functions.row_count <= limit, (
+        f"The functions table has {functions.row_count} rows, more than --limit {limit}; "
+        "the query must pass limit to its LIMIT clause"
+    )
     console.print(functions)
 
 
@@ -198,7 +207,10 @@ async def ask_missing(loaded: Config, store: Store, missing: list[tuple[str, str
 
 
 def labelled(loaded: Config, store: Store, name: str) -> list[tuple[bool, float | None, str, str]]:
-    assert name in loaded.rules, "Rule must be configured"
+    assert name in loaded.rules, (
+        f"labelled was asked about {name}, which is not a configured rule; "
+        "reject unknown rules with Config.unknown_rule before calling it"
+    )
     rows = [
         (bool(real), p, language, source)
         for real, p, language, source in store.query(
@@ -211,7 +223,10 @@ def labelled(loaded: Config, store: Store, name: str) -> list[tuple[bool, float 
             (loaded.model, question_hash(loaded.rules[name]), name),
         )
     ]
-    assert all(row[3] for row in rows), "Every labelled function must have source"
+    assert all(row[3] for row in rows), (
+        f"A function labelled for {name} has no stored source, so the units table is corrupt; "
+        f"run nouls check on its file again to store the source"
+    )
     return rows
 
 
@@ -247,7 +262,7 @@ def thresholds(rule: str | None = None, *, ask: bool = False, config: ConfigOpti
     """
     loaded, store = open_store(config)
     if rule is not None and rule not in loaded.rules:
-        print(f"nouls: unknown rule {rule}, see nouls rules", file=sys.stderr)
+        print(loaded.unknown_rule(rule), file=sys.stderr)
         return 2
     names = [rule] if rule else [name for name, r in loaded.rules.items() if r.enabled]
     assert all(name in loaded.rules for name in names), "Every rule must be configured"

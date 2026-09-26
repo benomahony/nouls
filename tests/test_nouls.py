@@ -33,7 +33,7 @@ async def test_unchanged_functions_are_cached_across_processes(config, store) ->
     )
     assert len(client.calls) == 3
     ((asked, cached),) = reopened.query("SELECT SUM(asked), SUM(cached) FROM runs")
-    assert (asked, cached) == (33, 11)
+    assert (asked, cached) == (42, 14)
 
 
 async def test_rewording_one_rule_only_reasks_that_rule(config, store) -> None:
@@ -157,7 +157,7 @@ async def test_render_is_one_based(config, store) -> None:
     findings = await Analyser(config, as_client(FakeClient()), store).analyse(PYTHON, "python", APP)
     assert render(Path("a.py"), findings[0], True).startswith("a.py:5:9: error [unit_mismatch]")
     assert render(Path("a.py"), findings[0], True).endswith("(Probability: 95%)")
-    assert render(Path("a.py"), findings[0], False).endswith("without conversion")
+    assert render(Path("a.py"), findings[0], False).endswith("in the variable names")
 
 
 def test_desiderata_rules_only_apply_to_test_files(config) -> None:

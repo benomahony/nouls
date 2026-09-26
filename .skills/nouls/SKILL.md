@@ -43,7 +43,7 @@ nouls serve
 rules:
   ledger_sign:
     question: Does the function add a debit where the domain requires subtracting it, or the reverse?
-    message: Debit and credit signs look inverted
+    message: Debit and credit signs look inverted. Subtract debits and add credits
     severity: error
     threshold: 0.9
     languages: [python]
@@ -51,6 +51,8 @@ rules:
 ```
 
 Questions must be a single yes/no judgement about the function in the `function` state field. Never ask for a number.
+
+Write each `message` in plain language, say precisely what is wrong, then suggest how to fix it. The reader may be a user, a developer or an agent, so name the exact command, setting or code to change.
 
 ## Resources
 

@@ -9,6 +9,7 @@ from rich.console import Console
 
 from nouls import cli
 from nouls.cli import app
+from nouls.config import load_config
 from nouls.store import Store
 from tests.conftest import PYTHON, FakeClient
 
@@ -50,7 +51,7 @@ def test_check_hides_probability_when_configured(
     (tmp_path / "app.py").write_text(PYTHON)
     (tmp_path / "nouls.yaml").write_text("show_probability: false\n")
     run("check")
-    assert capsys.readouterr().out.rstrip().endswith("without conversion")
+    assert capsys.readouterr().out.rstrip().endswith("in the variable names")
     assert client.calls
 
 
@@ -84,7 +85,9 @@ def test_check_prints_no_issues_found_on_a_clean_terminal_run(
 
 def test_check_rejects_missing_paths(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert run("check", str(tmp_path / "nope")) == 2
-    assert "no such file or directory" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "nope because it does not exist" in err
+    assert "Fix the path" in err
 
 
 def test_rules_lists_scope_and_threshold(
@@ -120,6 +123,19 @@ def test_rules_prints_a_table_on_a_terminal(
     assert "mixed_abstraction" not in out
 
 
+def test_rules_explains_how_to_fix_every_rule_being_disabled(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    names = load_config(tmp_path).rules
+    (tmp_path / "nouls.yaml").write_text(
+        "rules:\n" + "".join(f"  {name}:\n    enabled: false\n" for name in names)
+    )
+    assert run("rules") == 2
+    err = capsys.readouterr().err
+    assert "every rule is disabled" in err
+    assert "Set enabled: true" in err
+
+
 def test_rules_uses_console_not_bare_print() -> None:
     tree = ast.parse(inspect.getsource(cli.rules))
     calls = [
@@ -138,9 +154,12 @@ def test_label_rejects_unknown_rules_and_lines(
     assert run("label", str(source), "5", "made_up", "real") == 2
     assert run("label", str(source), "1", "unit_mismatch", "real") == 2
     assert run("label", str(tmp_path / "notes.txt"), "1", "unit_mismatch", "real") == 2
+    assert run("label", str(tmp_path / "gone.py"), "1", "unit_mismatch", "real") == 2
     err = capsys.readouterr().err
-    assert "unknown rule made_up" in err
-    assert "no function contains" in err
+    assert "there is no rule called made_up" in err
+    assert "line 1 of" in err and "outside every function" in err
+    assert "notes.txt has no configured language" in err and ".py" in err
+    assert "gone.py because it does not exist" in err
 
 
 def test_label_rejects_non_positive_lines(tmp_path: Path) -> None:
@@ -198,13 +217,17 @@ def test_review_skips_rows_with_corrupt_probability(
         ),
     )
     assert run("review", "unit_mismatch") == 0
-    assert "corrupt stored probability" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "outside 0 to 1" in err
+    assert "Run nouls check" in err
     assert not store.query("SELECT * FROM labels")
 
 
 def test_review_rejects_unknown_rules(capsys: pytest.CaptureFixture[str]) -> None:
     assert run("review", "made_up") == 2
-    assert "unknown rule made_up" in capsys.readouterr().err
+    assert "Run nouls rules" in capsys.readouterr().err
+    assert run("review", "unit_mismatchh") == 2
+    assert "Did you mean unit_mismatch?" in capsys.readouterr().err
 
 
 def test_serve_starts_the_language_server(monkeypatch: pytest.MonkeyPatch) -> None:

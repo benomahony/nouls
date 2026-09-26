@@ -10,9 +10,15 @@ from nouls.config import Language
 
 @lru_cache(maxsize=None)
 def get_parser(grammar: str) -> Parser:
-    assert grammar, "Grammar name must not be empty"
+    assert grammar, (
+        "A language in your nouls config has an empty grammar; "
+        "set grammar to a tree-sitter-language-pack name such as python"
+    )
     parser = _get_parser(grammar)
-    assert parser is not None, "tree-sitter-language-pack must return a parser"
+    assert parser is not None, (
+        f"tree-sitter-language-pack returned no parser for {grammar!r}; "
+        "check the name against its supported languages or upgrade the package"
+    )
     return parser
 
 
@@ -40,7 +46,7 @@ class Unit:
 
 
 def headline(node: Node, source: str) -> Span:
-    assert source, "Unit source must not be empty"
+    assert source, "headline needs the unit's source text; pass the source sliced from the node"
     name = node.child_by_field_name("name")
     if name is not None:
         span = Span(
@@ -54,24 +60,39 @@ def headline(node: Node, source: str) -> Span:
             node.start_point.row,
             node.start_point.column + len(first_line),
         )
-    assert span.end_line >= span.line, "Span must not end before it starts"
+    assert span.end_line >= span.line, (
+        f"The diagnostic span for {node.type} ends on line {span.end_line} before it starts on "
+        f"line {span.line}; tree-sitter returned an inconsistent tree, so upgrade the grammar"
+    )
     return span
 
 
 def attached_start(node: Node, attached: set[str]) -> Node:
-    assert node.type not in attached, "A unit must not itself be an attached node"
+    assert node.type not in attached, (
+        f"{node.type} is listed in both units and attached for this language; "
+        "remove it from one of them in the nouls config"
+    )
     first = node
     while first.parent is not None and first.parent.type in attached:
         first = first.parent
     while first.prev_named_sibling is not None and first.prev_named_sibling.type in attached:
         first = first.prev_named_sibling
-    assert first.start_byte <= node.start_byte, "Attached nodes must precede the unit"
+    assert first.start_byte <= node.start_byte, (
+        f"An attached node starts after the {node.type} it belongs to; "
+        "only walk to parents and previous siblings when collecting attached nodes"
+    )
     return first
 
 
 def callee(node: Node, language: Language) -> str | None:
-    assert language.calls is not None, "Language must declare test calls"
-    assert node.type == language.calls.node, "Only test call nodes have a callee"
+    assert language.calls is not None, (
+        f"callee was called for {language.grammar}, which has no calls section; "
+        "only call it when language.calls is set"
+    )
+    assert node.type == language.calls.node, (
+        f"callee expects a {language.calls.node} node but got {node.type}; "
+        "check node.type against calls.node before calling it"
+    )
     target = node.child_by_field_name(language.calls.callee)
     if target is None or not target.text:
         return None

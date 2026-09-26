@@ -35,7 +35,7 @@ def test_help_and_rules_run_as_a_real_process(tmp_path: Path) -> None:
         [NOULS, "rules"], capture_output=True, text=True, check=True, cwd=tmp_path
     ).stdout
     assert "Usage examples:" in help_text
-    assert len(rules.splitlines()) == 25
+    assert len(rules.splitlines()) == 28
 
 
 def test_language_server_handshake_over_stdio(tmp_path: Path) -> None:

@@ -117,7 +117,8 @@ async def test_analysis_failures_are_logged_not_raised(
     monkeypatch.setattr(ls.analyser, "analyse", explode)
     await lint(ls, "file:///app.py")
     assert ls.published == []
-    assert "nouls analysis failed" in caplog.text
+    assert "nouls could not analyse" in caplog.text
+    assert "TYPESAFE_API_KEY" in caplog.text
 
 
 async def test_code_actions_offer_both_labels_and_relabel(ls: Any) -> None:
