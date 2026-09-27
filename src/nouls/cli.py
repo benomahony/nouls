@@ -190,14 +190,14 @@ async def run_check(paths: list[Path], config: Config, root: Path) -> int:
 
 
 @app.command
-def check(*paths: Path, config: ConfigOption = None) -> int:
+def check(paths: list[Path] | None = None, /, *, config: ConfigOption = None) -> int:
     """Lint files or directories and exit non zero when any error level rule fires.
 
     Returns:
         1 when an error level rule fired, 2 for a usage error, otherwise 0.
 
     """
-    targets = list(paths) or [Path.cwd()]
+    targets = paths or [Path.cwd()]
     missing = [target for target in targets if not target.exists()]
     if missing:
         return fail(

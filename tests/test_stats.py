@@ -27,9 +27,9 @@ def checked(tmp_path: Path, client: FakeClient) -> Path:
 
     """
     _ = (tmp_path / "app.py").write_text(PYTHON)
-    _ = run("check")
-    _ = run("label", "app.py", "5", "unit_mismatch", "real")
-    _ = run("label", "app.py", "9", "unit_mismatch", "false")
+    _ = run(["check"])
+    _ = run(["label", "app.py", "5", "unit_mismatch", "real"])
+    _ = run(["label", "app.py", "9", "unit_mismatch", "false"])
     assert client.calls
     return tmp_path
 
@@ -38,7 +38,7 @@ def checked(tmp_path: Path, client: FakeClient) -> Path:
 def test_rules_reports_fire_rate_and_histogram(capsys: pytest.CaptureFixture[str]) -> None:
     """Rules reports fire rate and histogram."""
     _ = capsys.readouterr()
-    _ = run("stats", "rules")
+    _ = run(["stats", "rules"])
     row = next(line for line in capsys.readouterr().out.splitlines() if "unit_mismatch" in line)
     assert "50%" in row
     assert "█" in row
@@ -48,7 +48,7 @@ def test_rules_reports_fire_rate_and_histogram(capsys: pytest.CaptureFixture[str
 def test_hotspots_lists_the_offending_function(capsys: pytest.CaptureFixture[str]) -> None:
     """Hotspots lists the offending function."""
     _ = capsys.readouterr()
-    _ = run("stats", "hotspots", "--limit", "5")
+    _ = run(["stats", "hotspots", "--limit", "5"])
     out = capsys.readouterr().out
     assert "app.py:5" in out
     assert "expired" in out
@@ -57,9 +57,9 @@ def test_hotspots_lists_the_offending_function(capsys: pytest.CaptureFixture[str
 @pytest.mark.usefixtures("checked")
 def test_cost_counts_cache_hits(client: FakeClient, capsys: pytest.CaptureFixture[str]) -> None:
     """Cost counts cache hits."""
-    _ = run("check")
+    _ = run(["check"])
     _ = capsys.readouterr()
-    _ = run("stats", "cost", "--price-per-million", "1")
+    _ = run(["stats", "cost", "--price-per-million", "1"])
     row = next(line for line in capsys.readouterr().out.splitlines() if "│ 20" in line)
     tokens = sum(100 * len(call.questions) for call in client.calls)  # FakeClient's usage
     assert "50%" in row
@@ -71,7 +71,7 @@ def test_cost_counts_cache_hits(client: FakeClient, capsys: pytest.CaptureFixtur
 def test_thresholds_scores_labels(capsys: pytest.CaptureFixture[str]) -> None:
     """Thresholds scores labels."""
     _ = capsys.readouterr()
-    assert run("stats", "thresholds", "unit_mismatch") == 0
+    assert run(["stats", "thresholds", "unit_mismatch"]) == 0
     out = capsys.readouterr().out
     assert "unit_mismatch  1 real, 1 false" in out
     assert "0.80 ◂ current" in out
@@ -85,16 +85,16 @@ def test_thresholds_asks_reworded_questions(
         "rules:\n  unit_mismatch:\n    question: Are seconds added to milliseconds?\n"
     )
     _ = capsys.readouterr()
-    _ = run("stats", "thresholds")
+    _ = run(["stats", "thresholds"])
     assert "2 unanswered" in capsys.readouterr().out
-    _ = run("stats", "thresholds", "--ask")
+    _ = run(["stats", "thresholds", "--ask"])
     assert "unanswered" not in capsys.readouterr().out
     assert [call.questions for call in client.calls[-2:]] == [{"unit_mismatch"}] * 2
 
 
 def test_thresholds_rejects_unknown_rules(capsys: pytest.CaptureFixture[str]) -> None:
     """Thresholds rejects unknown rules."""
-    assert run("stats", "thresholds", "made_up") == USAGE_ERROR
+    assert run(["stats", "thresholds", "made_up"]) == USAGE_ERROR
     assert "there is no rule called made_up" in capsys.readouterr().err
 
 

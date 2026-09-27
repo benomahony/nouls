@@ -77,11 +77,11 @@ def default_path() -> Path:
 DIGEST_LENGTH = 32
 
 
-def digest(*parts: str) -> str:
+def digest(parts: Sequence[str]) -> str:
     """Hash text parts into a short stable identifier.
 
     Args:
-        *parts: The text to hash, joined with NUL.
+        parts: The text to hash, joined with NUL.
 
     Returns:
         The first 32 hex characters of the SHA-256.

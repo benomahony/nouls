@@ -46,7 +46,7 @@ def test_broken_configs_are_reported_with_how_to_fix_them(
 ) -> None:
     """Broken configs are reported with how to fix them, not as a traceback."""
     _ = (tmp_path / "nouls.yaml").write_text(yaml)
-    assert run("rules") == USAGE_ERROR
+    assert run(["rules"]) == USAGE_ERROR
     err = capsys.readouterr().err
     assert err.startswith(f"nouls: {tmp_path / 'nouls.yaml'} ")
     assert problem in err
@@ -55,7 +55,7 @@ def test_broken_configs_are_reported_with_how_to_fix_them(
 
 def test_a_missing_config_file_is_reported(capsys: pytest.CaptureFixture[str]) -> None:
     """A missing config file is reported."""
-    assert run("rules", "--config", "missing.yaml") == USAGE_ERROR
+    assert run(["rules", "--config", "missing.yaml"]) == USAGE_ERROR
     assert "missing.yaml cannot be read" in capsys.readouterr().err
 
 

@@ -149,7 +149,7 @@ async def test_file_rules_are_asked_once_about_the_whole_file(config: Config, st
 def test_label_records_a_verdict_on_a_whole_file(tmp_path: Path) -> None:
     """Label records a verdict on a whole file."""
     _ = (tmp_path / "app.py").write_text(PYTHON)
-    assert run("label", "app.py", "1", "cwe_1115", "false") == 0
+    assert run(["label", "app.py", "1", "cwe_1115", "false"]) == 0
     store = Store(tmp_path / "xdg" / "nouls.db")
     assert store.labels([unit_hash(file_kind("python"), PYTHON)]) == {
         ("cwe_1115", unit_hash(file_kind("python"), PYTHON)): False
@@ -158,7 +158,7 @@ def test_label_records_a_verdict_on_a_whole_file(tmp_path: Path) -> None:
 
 def test_rules_lists_metric_rules_with_their_limit(capsys: pytest.CaptureFixture[str]) -> None:
     """Rules lists metric rules with their limit."""
-    assert run("rules") == 0
+    assert run(["rules"]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert "cwe_1064 (info, all languages): Is the number of parameters above 7?" in lines
     assert "cwe_1121 (warning, all languages): Is the cyclomatic complexity above 10?" in lines
@@ -170,5 +170,5 @@ def test_rules_lists_metric_rules_with_their_limit(capsys: pytest.CaptureFixture
 
 def test_thresholds_explains_metric_rules_have_none(capsys: pytest.CaptureFixture[str]) -> None:
     """Thresholds explains metric rules have none."""
-    assert run("stats", "thresholds", "cwe_1064") == USAGE_ERROR
+    assert run(["stats", "thresholds", "cwe_1064"]) == USAGE_ERROR
     assert "Change its limit" in capsys.readouterr().err

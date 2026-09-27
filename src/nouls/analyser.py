@@ -119,7 +119,7 @@ def unit_hash(language: str, source: str) -> str:
     """
     assert language, "Language must not be empty"
     assert source, "Source must not be empty"
-    return digest(language, source)
+    return digest((language, source))
 
 
 def project_source(root: Path, patterns: list[str]) -> tuple[list[Path], str]:
@@ -185,9 +185,9 @@ def question_hash(rule: Rule) -> str:
 
     """
     value = (
-        digest(rule.question)
+        digest((rule.question,))
         if rule.question is not None
-        else digest("metric", str(rule.metric), str(rule.limit))
+        else digest(("metric", str(rule.metric), str(rule.limit)))
     )
     assert rule.question is not None or rule.metric is not None, "A rule decides some way"
     assert len(value) == DIGEST_LENGTH, "Question hash must be a digest"

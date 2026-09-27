@@ -60,7 +60,7 @@ def test_check_without_a_key_explains_instead_of_crashing(
     """Check without a key explains how to set one instead of printing a traceback."""
     monkeypatch.delenv(API_KEY, raising=False)
     _ = (tmp_path / "app.py").write_text(PYTHON, encoding="utf-8")
-    assert run("check", str(tmp_path)) == USAGE_ERROR
+    assert run(["check", str(tmp_path)]) == USAGE_ERROR
     err = capsys.readouterr().err
     assert f"{API_KEY} is not set" in err
     assert "Traceback" not in err
@@ -72,7 +72,7 @@ def test_check_with_a_rejected_key_explains_it(
     """Check with a rejected key explains it."""
     client.error = TypeSafeAuthenticationError(401, {"error": "bad"}, NO_BODY)
     _ = (tmp_path / "app.py").write_text(PYTHON, encoding="utf-8")
-    assert run("check", str(tmp_path)) == USAGE_ERROR
+    assert run(["check", str(tmp_path)]) == USAGE_ERROR
     assert "did not accept the key" in capsys.readouterr().err
 
 

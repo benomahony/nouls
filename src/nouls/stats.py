@@ -339,6 +339,52 @@ def threshold_table(
     return table
 
 
+def untunable(loaded: Config, rule: str) -> str | None:
+    """Explain why a rule has no thresholds to show.
+
+    Args:
+        loaded: The loaded configuration.
+        rule: The rule the user asked about.
+
+    Returns:
+        An error message for an unknown rule or a metric rule, or None for a question rule.
+
+    """
+    assert rule, "untunable needs the rule name the user typed"
+    if rule not in loaded.rules:
+        return loaded.unknown_rule(rule)
+    found = loaded.rules[rule]
+    problem = None
+    if found.question is None:
+        problem = (
+            f"nouls: {rule} measures {found.metric} instead of asking a question, "
+            "so it has no threshold to tune. Change its limit in your nouls config instead."
+        )
+    assert problem is None or problem.startswith("nouls: "), "Errors start with nouls:"
+    return problem
+
+
+def ask_unanswered(loaded: Config, store: Store, names: list[str]) -> None:
+    """Ask the current wording of rules about their labelled units that have no answer yet.
+
+    Args:
+        loaded: The loaded configuration.
+        store: The store holding labels and answers.
+        names: The question rules to ask.
+
+    """
+    assert all(loaded.rules[name].question for name in names), "Only question rules are asked"
+    missing = [
+        (name, language, source)
+        for name in names
+        for _, p, language, source in labelled(loaded, store, name)
+        if p is None
+    ]
+    assert all(item[0] in names for item in missing), "Only the named rules are asked"
+    if missing:
+        asyncio.run(ask_missing(loaded, store, missing))
+
+
 @stats.command
 def thresholds(rule: str | None = None, *, ask: bool = False, config: ConfigOption = None) -> int:
     """Precision and recall at each threshold, from your labels and the current question wording.
@@ -353,13 +399,8 @@ def thresholds(rule: str | None = None, *, ask: bool = False, config: ConfigOpti
 
     """
     loaded, store = open_store(config)
-    if rule is not None and rule not in loaded.rules:
-        return fail(loaded.unknown_rule(rule))
-    if rule is not None and loaded.rules[rule].question is None:
-        return fail(
-            f"nouls: {rule} measures {loaded.rules[rule].metric} instead of asking a question, "
-            "so it has no threshold to tune. Change its limit in your nouls config instead."
-        )
+    if rule is not None and (problem := untunable(loaded, rule)):
+        return fail(problem)
     names = (
         [rule]
         if rule
@@ -367,17 +408,10 @@ def thresholds(rule: str | None = None, *, ask: bool = False, config: ConfigOpti
     )
     assert all(name in loaded.rules for name in names), "Every rule must be configured"
     if ask:
-        missing = [
-            (name, language, source)
-            for name in names
-            for _, p, language, source in labelled(loaded, store, name)
-            if p is None
-        ]
-        if missing:
-            try:
-                asyncio.run(ask_missing(loaded, store, missing))
-            except TypeSafeError as error:
-                return fail(explain(error))
+        try:
+            ask_unanswered(loaded, store, names)
+        except TypeSafeError as error:
+            return fail(explain(error))
     shown = 0
     for name in names:
         rows = labelled(loaded, store, name)

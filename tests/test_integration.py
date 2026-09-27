@@ -20,12 +20,12 @@ NOULS = str(Path(sys.executable).parent / "nouls")
 type Message = dict[str, object]
 
 
-def dig(value: object, *keys: str) -> object:
+def dig(value: object, keys: list[str]) -> object:
     """Walk into nested JSON objects.
 
     Args:
         value: A JSON value.
-        *keys: The keys to follow, outermost first.
+        keys: The keys to follow, outermost first.
 
     Returns:
         The value at the end of the keys.
@@ -104,10 +104,10 @@ def test_language_server_handshake_over_stdio(tmp_path: Path) -> None:
         [NOULS, "serve"], input=session, capture_output=True, timeout=30, check=False, cwd=tmp_path
     )
     replies = {message.get("id"): message for message in responses(result.stdout)}
-    capabilities = dig(replies[1], "result", "capabilities")
-    assert dig(capabilities, "codeActionProvider") == {"codeActionKinds": ["quickfix"]}
-    assert dig(capabilities, "executeCommandProvider") == {"commands": ["nouls.label"]}
-    assert dig(replies[2], "result") is None
+    capabilities = dig(replies[1], ["result", "capabilities"])
+    assert dig(capabilities, ["codeActionProvider"]) == {"codeActionKinds": ["quickfix"]}
+    assert dig(capabilities, ["executeCommandProvider"]) == {"commands": ["nouls.label"]}
+    assert dig(replies[2], ["result"]) is None
     assert result.returncode == 0
 
 

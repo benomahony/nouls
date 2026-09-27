@@ -178,7 +178,7 @@ def test_check_reports_every_relaxed_setting(
 ) -> None:
     """Check reports every relaxed setting at its line, and the project finding on line 1."""
     _ = (tmp_path / "pyproject.toml").write_text(LAX)
-    assert run("check", str(tmp_path)) == 0
+    assert run(["check", str(tmp_path)]) == 0
     out = capsys.readouterr().out
     assert "pyproject.toml:1:1: warning [unscheduled_static_analysis]" in out
     assert "pyproject.toml:4:5: warning [relaxed_warnings]" in out
@@ -191,9 +191,9 @@ def test_labelling_one_setting_false_silences_only_that_line(
 ) -> None:
     """Labelling one setting false silences only that line."""
     _ = (tmp_path / "pyproject.toml").write_text(LAX)
-    assert run("label", "pyproject.toml", "4", "relaxed_warnings", "false") == 0
+    assert run(["label", "pyproject.toml", "4", "relaxed_warnings", "false"]) == 0
     assert "Labelled relaxed_warnings on pyproject.toml:4 as false" in capsys.readouterr().out
-    _ = run("check", str(tmp_path))
+    _ = run(["check", str(tmp_path)])
     out = capsys.readouterr().out
     assert "pyproject.toml:4:5" not in out
     assert "pyproject.toml:5:5: warning [relaxed_warnings]" in out
@@ -204,7 +204,7 @@ def test_labelling_a_line_that_sets_nothing_explains_why(
 ) -> None:
     """Labelling a line that sets nothing explains why."""
     _ = (tmp_path / "pyproject.toml").write_text(LAX)
-    assert run("label", "pyproject.toml", "1", "relaxed_warnings", "false") == USAGE_ERROR
+    assert run(["label", "pyproject.toml", "1", "relaxed_warnings", "false"]) == USAGE_ERROR
     assert "line 1 of pyproject.toml does not set anything" in capsys.readouterr().err
 
 
@@ -214,15 +214,15 @@ def test_labelling_the_project_false_silences_it(
 ) -> None:
     """Labelling the project false silences it."""
     _ = (tmp_path / "pyproject.toml").write_text(LAX)
-    assert run("label", "pyproject.toml", "1", "unscheduled_static_analysis", "false") == 0
+    assert run(["label", "pyproject.toml", "1", "unscheduled_static_analysis", "false"]) == 0
     assert "Labelled unscheduled_static_analysis on the project" in capsys.readouterr().out
-    _ = run("check", str(tmp_path))
+    _ = run(["check", str(tmp_path)])
     assert "unscheduled_static_analysis" not in capsys.readouterr().out
 
 
 def test_rules_lists_project_and_setting_scopes(capsys: pytest.CaptureFixture[str]) -> None:
     """Rules lists project and setting scopes."""
-    _ = run("rules")
+    _ = run(["rules"])
     out = capsys.readouterr().out
     assert (
         "unscheduled_static_analysis (warning, threshold 0.8, project in 40 file patterns)" in out

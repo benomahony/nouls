@@ -258,6 +258,30 @@ def unit_at(node: Node, data: bytes, attached: set[str]) -> Unit:
     return unit
 
 
+def is_test_call(node: Node, language: Language, *, tests: bool) -> bool:
+    """Tell whether a node is a test call, such as ``it(...)`` or ``beforeEach(...)``.
+
+    Args:
+        node: Any node.
+        language: The file's language.
+        tests: Whether the file is a test file; test calls only count in test files.
+
+    Returns:
+        True when the file is a test file and the node calls one of the language's test calls.
+
+    """
+    calls = language.calls
+    found = (
+        tests
+        and calls is not None
+        and node.type == calls.node
+        and callee(node, language) in calls.names
+    )
+    assert not found or tests, "Test calls only count in test files"
+    assert not found or calls is not None, "Only a language with calls has test calls"
+    return found
+
+
 def extract_units(text: str, language: Language, *, tests: bool = False) -> list[Unit]:
     """Split a file into units.
 
@@ -275,7 +299,6 @@ def extract_units(text: str, language: Language, *, tests: bool = False) -> list
     )
     kinds = set(language.units)
     attached = set(language.attached)
-    calls = language.calls if tests else None
     data = text.encode()
     units: list[Unit] = []
     tree = get_parser(language.grammar).parse(data)
@@ -284,9 +307,7 @@ def extract_units(text: str, language: Language, *, tests: bool = False) -> list
     stack = [root]
     while stack:
         node = stack.pop()
-        is_call = (
-            calls is not None and node.type == calls.node and callee(node, language) in calls.names
-        )
+        is_call = is_test_call(node, language, tests=tests)
         is_unit = node.type in kinds or node_key(node) in tagged
         if (is_unit or is_call) and node.text:
             units.append(unit_at(node, data, attached))

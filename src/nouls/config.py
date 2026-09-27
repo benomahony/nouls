@@ -197,24 +197,49 @@ class Rule(BaseModel):
             InvalidDetectorError: When the rule cannot decide, or could decide two ways.
 
         """
-        problem = None
-        if (self.question is None) == (self.metric is None):
-            problem = "the rule has both a question and a metric, or neither"
-        elif self.metric is None and self.limit is not None:
-            problem = "the rule has a limit but no metric to compare it with"
-        elif self.metric is not None and (self.limit is None or self.limit < 0):
-            problem = f"metric {self.metric} needs a limit of 0 or more"
-        elif self.metric is not None and self.scope != (
-            needed := "file" if self.metric in FILE_METRICS else "function"
-        ):
-            problem = f"metric {self.metric} measures a {needed}, so the rule needs scope: {needed}"
-        elif self.question is not None and not self.question.strip():
-            problem = "the rule's question is blank"
+        problem = self.question_problem() or self.metric_problem()
         if problem:
             raise InvalidDetectorError(problem)
         assert (self.question is None) != (self.metric is None), "A rule decides exactly one way"
         assert self.metric is None or self.limit is not None, "A metric rule has a limit"
         return self
+
+    def question_problem(self) -> str | None:
+        """Find what is wrong with whether the rule asks or measures.
+
+        Returns:
+            The problem, or None when the rule has exactly one usable way to decide.
+
+        """
+        problem = None
+        if (self.question is None) == (self.metric is None):
+            problem = "the rule has both a question and a metric, or neither"
+        elif self.question is not None and not self.question.strip():
+            problem = "the rule's question is blank"
+        elif self.metric is None and self.limit is not None:
+            problem = "the rule has a limit but no metric to compare it with"
+        assert problem is None or problem.startswith("the rule"), "Problems describe the rule"
+        assert problem or self.question is not None or self.metric is not None, "It can decide"
+        return problem
+
+    def metric_problem(self) -> str | None:
+        """Find what is wrong with a metric rule's limit or scope.
+
+        Returns:
+            The problem, or None for a question rule or a well formed metric rule.
+
+        """
+        if self.metric is None:
+            return None
+        needed = "file" if self.metric in FILE_METRICS else "function"
+        problem = None
+        if self.limit is None or self.limit < 0:
+            problem = f"metric {self.metric} needs a limit of 0 or more"
+        elif self.scope != needed:
+            problem = f"metric {self.metric} measures a {needed}, so the rule needs scope: {needed}"
+        assert problem is None or self.metric in problem, "Problems name the metric"
+        assert needed in {"file", "function"}, "Metrics measure files or functions"
+        return problem
 
     def describe_check(self) -> str:
         """Say how the rule decides.

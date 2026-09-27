@@ -89,7 +89,7 @@ class FakeClient:
         """
         return self
 
-    async def __aexit__(self, *_: object) -> None:
+    async def __aexit__(self, _type: object, _error: object, _traceback: object) -> None:
         """Close the fake client."""
 
     async def system_one(
@@ -199,27 +199,27 @@ def as_server(fake: FakeServer) -> NoulsServer:
     return cast("NoulsServer", cast("object", fake))
 
 
-def run(*tokens: str) -> int:
+def run(tokens: list[str]) -> int:
     """Run the nouls command line in process.
 
     Args:
-        *tokens: The command line arguments.
+        tokens: The command line arguments.
 
     Returns:
         The exit code.
 
     """
     with pytest.raises(SystemExit) as exit_info:
-        main(list(tokens))
+        main(tokens)
     code = exit_info.value.code
     return code if isinstance(code, int) else 0
 
 
-def scripted(*replies: str) -> Callable[..., str]:
+def scripted(replies: list[str]) -> Callable[..., str]:
     """Answer prompts with fixed replies, in order.
 
     Args:
-        *replies: What the user would type at each prompt.
+        replies: What the user would type at each prompt.
 
     Returns:
         A stand in for Prompt.ask.
@@ -227,8 +227,11 @@ def scripted(*replies: str) -> Callable[..., str]:
     """
     remaining = iter(replies)
 
-    def reply(*_args: object, **_kwargs: object) -> str:
-        return next(remaining)
+    def reply(prompt: str, *, choices: list[str], default: str) -> str:
+        answer = next(remaining)
+        assert prompt, "Review asks a question"
+        assert {answer, default} <= set(choices), f"{answer} must be one of {choices}"
+        return answer
 
     return reply
 

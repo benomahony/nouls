@@ -123,7 +123,7 @@ async def test_analysis_failures_are_logged_not_raised(
 ) -> None:
     """Analysis failures are logged not raised."""
 
-    async def explode(*_: object) -> None:
+    async def explode(_text: str, _language: str, _path: Path) -> None:
         await asyncio.sleep(0)
         raise ParserCrashedError
 
