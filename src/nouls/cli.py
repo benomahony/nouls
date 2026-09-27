@@ -3,8 +3,9 @@
 """Command line interface: check, rules, label, review, serve and stats."""
 
 import asyncio
+import sys
 from collections import Counter
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -24,7 +25,7 @@ from nouls.analyser import (
     project_source,
     unit_hash,
 )
-from nouls.config import Config, Rule, Severity, find_root, load_config
+from nouls.config import Config, ConfigError, Rule, Severity, find_root, load_config
 from nouls.output import fail, say
 from nouls.server import server
 from nouls.settings import settings_in
@@ -509,3 +510,19 @@ def serve() -> None:
     assert server.name == "nouls", "Language server must identify as nouls"
     assert not server.pending, "Language server must start idle"
     server.start_io()
+
+
+def main(tokens: Sequence[str] | None = None) -> None:
+    """Run the command line, reporting a broken nouls config as a message instead of a traceback.
+
+    Args:
+        tokens: The arguments, or None to read them from the process.
+
+    """
+    assert tokens is None or all(isinstance(token, str) for token in tokens), "Tokens are text"
+    try:
+        app(tokens)
+    except ConfigError as error:
+        code = fail(str(error))
+        assert code, "A config error exits non zero"
+        sys.exit(code)

@@ -44,7 +44,7 @@ mcp = [
 ]
 
 [project.scripts]
-nouls = "nouls.cli:app"
+nouls = "nouls.cli:main"
 
 [build-system]
 requires = ["hatchling"]

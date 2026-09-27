@@ -328,14 +328,19 @@ class Store:
             params: The statement's parameters.
 
         Returns:
-            Every row.
+            Every row. A statement that tries to write, including through ``WITH ... DELETE``,
+            which a check of its first word would let through, fails with an OperationalError.
 
         """
         assert sql.strip(), "query needs SQL; pass a SELECT or WITH statement"
         assert sql.lstrip().upper().startswith(("SELECT", "WITH")), (
             "query only runs read only statements; write through the Store's own methods instead"
         )
-        return self.rows(row, sql, params)
+        _ = self.db.execute("PRAGMA query_only = ON")
+        try:
+            return self.rows(row, sql, params)
+        finally:
+            _ = self.db.execute("PRAGMA query_only = OFF")
 
     def rows[Row: tuple[object, ...]](
         self, row: type[Row], sql: str, params: Sequence[object] = ()

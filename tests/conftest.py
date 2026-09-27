@@ -14,7 +14,7 @@ from lsprotocol import types
 from typesafe_sdk import AsyncTypeSafeClient
 
 from nouls.analyser import Analyser
-from nouls.cli import app
+from nouls.cli import main
 from nouls.config import Config, load_config
 from nouls.server import NoulsServer
 from nouls.store import Store
@@ -210,7 +210,7 @@ def run(*tokens: str) -> int:
 
     """
     with pytest.raises(SystemExit) as exit_info:
-        app(list(tokens))
+        main(list(tokens))
     code = exit_info.value.code
     return code if isinstance(code, int) else 0
 

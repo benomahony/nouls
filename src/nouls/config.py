@@ -6,10 +6,10 @@ from difflib import get_close_matches
 from fnmatch import fnmatch
 from importlib.resources import files
 from pathlib import Path
-from typing import Literal, cast
+from typing import Annotated, Literal, cast
 
 import yaml
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
 from tree_sitter_language_pack import (
     SupportedLanguage,
     detect_language_from_path,
@@ -27,6 +27,43 @@ Severity = Literal["error", "warning", "info", "hint"]
 Scope = Literal["function", "file", "project", "setting"]
 type Tree = dict[str, object]
 TAG_KINDS = ("definition.function", "definition.method")
+Probability = Annotated[float, Field(ge=0.0, le=1.0)]
+Pattern = Annotated[str, Field(min_length=1)]
+
+
+class ConfigError(ValueError):
+    """A nouls config file cannot be read, or does not describe a valid configuration."""
+
+    def __init__(self, source: str, problem: str) -> None:
+        """Say which file is wrong, what is wrong with it and how to fix it.
+
+        Args:
+            source: The config file, or ``defaults.yaml`` for the built in settings.
+            problem: What is wrong and how to fix it, continuing a sentence about the file.
+
+        """
+        super().__init__(f"nouls: {source} {problem}")
+        assert source, "ConfigError needs the file it is about"
+        assert str(self).startswith("nouls: "), "Errors start with nouls: so users know the source"
+
+
+class StoreIsDirectoryError(ConfigError):
+    """The store setting names a directory, where nouls needs a SQLite file."""
+
+    def __init__(self, path: Path) -> None:
+        """Say which directory was given and what to set instead.
+
+        Args:
+            path: The directory the store setting names.
+
+        """
+        super().__init__(
+            "the nouls config",
+            f"sets store to {path}, which is a directory. "
+            "Set store to a file path, such as ~/.cache/nouls/nouls.db.",
+        )
+        assert str(path) in str(self), "The error must name the directory"
+        assert "Set store" in str(self), "The error must say how to fix the setting"
 
 
 class Calls(BaseModel):
@@ -50,6 +87,32 @@ class Language(BaseModel):
     units: list[str] = []
     attached: list[str] = []
     calls: Calls | None = None
+
+    @model_validator(mode="after")
+    def finds_functions(self) -> "Language":
+        """Reject languages nouls cannot find functions in, or whose units wrap themselves.
+
+        Returns:
+            The language, unchanged.
+
+        Raises:
+            ValueError: When there is no way to find functions, or a node type is both a unit
+                and attached to one.
+
+        """
+        both = sorted(set(self.units) & set(self.attached))
+        if not self.units and not has_function_tags(self.grammar):
+            message = (
+                f"nouls cannot find functions in {self.grammar}, because its grammar has no "
+                "function tags; list the node types of its functions under units"
+            )
+            raise ValueError(message)
+        if both:
+            message = f"{', '.join(both)} is listed in both units and attached; remove it from one"
+            raise ValueError(message)
+        assert self.units or has_function_tags(self.grammar), "Functions can be found"
+        assert not both, "No node type is both a unit and attached to one"
+        return self
 
 
 class MissingProjectFilesError(ValueError):
@@ -96,9 +159,9 @@ class Rule(BaseModel):
     limit: int | None = None
     message: str
     severity: Severity = "warning"
-    threshold: float | None = None
+    threshold: Probability | None = None
     languages: list[str] | None = None
-    files: list[str] | None = None
+    files: list[Pattern] | None = None
     scope: Scope = "function"
     enabled: bool = True
 
@@ -172,16 +235,16 @@ class Rule(BaseModel):
 class Config(BaseModel):
     """The merged nouls configuration."""
 
-    model: str
-    threshold: float
-    concurrency: int
-    debounce_ms: int
+    model: Annotated[str, Field(min_length=1)]
+    threshold: Probability
+    concurrency: Annotated[int, Field(gt=0)]
+    debounce_ms: Annotated[int, Field(ge=0)]
     show_probability: bool
     lint_on: Literal["change", "save"]
     store: Path | None = None
-    exclude: list[str]
-    test_files: list[str] = []
-    languages: dict[str, Language]
+    exclude: list[Pattern]
+    test_files: list[Pattern] = []
+    languages: Annotated[dict[str, Language], Field(min_length=1)]
     rules: dict[str, Rule]
 
     def store_path(self) -> Path:
@@ -190,8 +253,13 @@ class Config(BaseModel):
         Returns:
             The configured store, or the default under the user's cache directory.
 
+        Raises:
+            StoreIsDirectoryError: When ``store`` names a directory.
+
         """
         path = self.store.expanduser() if self.store else default_path()
+        if not path.name or path.is_dir():
+            raise StoreIsDirectoryError(path)
         assert path.name, "Store path must name a file"
         assert not path.is_dir(), "Store path must not be a directory"
         return path
@@ -432,13 +500,12 @@ def as_tree(value: object) -> Tree | None:
     """
     if not isinstance(value, dict):
         return None
-    tree = cast("Tree", value)
-    assert all(isinstance(key, str) for key in tree), (
-        f"A nouls config map has a key that is not text, in {sorted(map(repr, tree))}; "
-        "quote numeric or boolean keys in the YAML"
-    )
+    tree = cast("dict[object, object]", value)
+    if not all(isinstance(key, str) for key in tree):
+        return None
+    assert all(isinstance(key, str) for key in tree), "Only maps with text keys are settings"
     assert tree is value, "as_tree must return the same map, not a copy"
-    return tree
+    return cast("Tree", tree)
 
 
 def load_yaml(text: str, source: str) -> Tree:
@@ -451,14 +518,29 @@ def load_yaml(text: str, source: str) -> Tree:
     Returns:
         The file's settings, or an empty map for an empty file.
 
+    Raises:
+        ConfigError: When the text is not YAML, or its top level is not a map of settings.
+
     """
-    loaded = cast("object", yaml.safe_load(text))
+    try:
+        loaded = cast("object", yaml.safe_load(text))
+    except yaml.YAMLError as error:
+        mark = error.problem_mark if isinstance(error, yaml.MarkedYAMLError) else None
+        where = f" on line {mark.line + 1}" if mark else ""
+        problem = error.problem if isinstance(error, yaml.MarkedYAMLError) else None
+        raise ConfigError(
+            source,
+            f"is not valid YAML{where}: {problem or error}. Fix the syntax on that line.",
+        ) from error
     tree = {} if loaded is None else as_tree(loaded)
-    assert tree is not None, (
-        f"{source} must be a YAML map of settings, but its top level is a "
-        f"{type(loaded).__name__}; start it with keys such as rules:"
-    )
+    if tree is None:
+        raise ConfigError(
+            source,
+            f"must be a map of settings, but its top level is a {type(loaded).__name__}. "
+            "Start it with keys such as rules:, and quote keys that are numbers or booleans.",
+        )
     assert loaded is None or tree is loaded, "load_yaml must return the parsed map itself"
+    assert isinstance(tree, dict), "load_yaml returns a map of settings"
     return tree
 
 
@@ -576,15 +658,49 @@ def load_config(start: Path, explicit: Path | None = None) -> Config:
     Returns:
         The validated configuration.
 
+    Raises:
+        ConfigError: When the config file cannot be read, is not YAML, or has invalid settings.
+
     """
     data = merge(load_builtin(DEFAULTS), load_builtin(CATALOGUE))
     assert "rules" in data, "Merging the built in files must keep their rules section"
     path = explicit or find_config(start.resolve())
     if path is not None:
-        data = merge(data, load_yaml(path.read_text(encoding="utf-8"), str(path)))
-    config = Config.model_validate(data)
-    assert config.languages, (
-        f"{path or DEFAULTS} leaves no languages configured, so nouls has nothing to lint; "
-        "add at least one entry under languages"
-    )
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError as error:
+            raise ConfigError(
+                str(path),
+                f"cannot be read: {error.strerror or error}. Check the path passed to --config.",
+            ) from error
+        data = merge(data, load_yaml(text, str(path)))
+    try:
+        config = Config.model_validate(data)
+    except ValidationError as error:
+        raise ConfigError(str(path or DEFAULTS), invalid_settings(error)) from error
+    assert config.languages, "Config requires at least one language"
     return config
+
+
+def invalid_settings(error: ValidationError) -> str:
+    """Describe every invalid setting in a config file, by where it sits.
+
+    Args:
+        error: What pydantic found wrong.
+
+    Returns:
+        The rest of a sentence about the file, naming each setting and what is wrong with it.
+
+    """
+    problems = [
+        f"{'.'.join(map(str, detail['loc'])) or 'the top level'}: "
+        f"{detail['msg'].removeprefix('Value error, ')}"
+        for detail in error.errors(include_url=False)
+    ]
+    assert problems, "A validation error names at least one problem"
+    text = (
+        f"has {len(problems)} invalid setting{'s' if len(problems) > 1 else ''}: "
+        f"{'; '.join(problems)}. Fix them, then run nouls rules to check the config loads."
+    )
+    assert text.endswith("loads."), "The message ends by saying how to check the fix"
+    return text

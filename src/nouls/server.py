@@ -13,7 +13,7 @@ from pygls.lsp.server import LanguageServer
 from typesafe_sdk import AsyncTypeSafeClient, TypeSafeError
 
 from nouls.analyser import Analyser, Finding
-from nouls.config import find_root, load_config, project_files
+from nouls.config import ConfigError, find_root, load_config, project_files
 from nouls.store import DIGEST_LENGTH, Store
 from nouls.typesafe import explain
 
@@ -122,6 +122,9 @@ async def lint(ls: NoulsServer, uri: str) -> None:
         analyser = ls.analyser
     except TypeSafeError as error:
         warn(ls, explain(error))
+        return
+    except ConfigError as error:
+        warn(ls, str(error))
         return
     await asyncio.sleep(analyser.config.debounce_ms / 1000)
     document = ls.workspace.get_text_document(uri)
