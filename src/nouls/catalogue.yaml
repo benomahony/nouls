@@ -18,13 +18,13 @@
 rules:
   # CWE-15 External Control of System or Configuration Setting
   cwe_15:
-    question: Does the function let a caller or user input choose a system or configuration setting, such as an environment variable, config key, database connection option or process setting, without restricting which settings or values are allowed?
+    question: Does the function let a untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) choose a system or configuration setting, such as an environment variable, config key, database connection option or process setting, without restricting which settings or values are allowed?
     message: Input decides a system or configuration setting. Allow only a fixed set of settings and values, and reject everything else
     severity: warning
 
   # CWE-22 Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')
   cwe_22:
-    question: Does the function build a file or directory path from caller or user input and use it without checking that the resolved path stays inside the intended base directory, so sequences such as .. or an absolute path could escape it?
+    question: Does the function build a file or directory path from untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) and use it without checking that the resolved path stays inside the intended base directory, so sequences such as .. or an absolute path could escape it?
     message: A path built from input can escape its directory with .. or an absolute path. Resolve the path and check it is still inside the allowed directory before using it
     severity: error
 
@@ -42,13 +42,13 @@ rules:
 
   # CWE-66 Improper Handling of File Names that Identify Virtual Resources
   cwe_66:
-    question: Does the function operate on a file name from input without rejecting names that refer to devices or virtual resources, such as CON, NUL, /dev/ paths, named pipes or alternate data streams?
-    message: A file name from input could name a device or virtual resource instead of a file. Reject device names, pipes and stream suffixes before using the name
+    question: Does the function open or operate on a file whose name comes from untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) without rejecting device or virtual resource names, such as CON, NUL, /dev/ paths, named pipes or alternate data streams?
+    message: An untrusted file name could name a device or virtual resource instead of a file. Reject device names, pipes and stream suffixes before using it
     severity: warning
 
   # CWE-73 External Control of File Name or Path
   cwe_73:
-    question: Does the function let caller or user input choose the name or path of a file it reads, writes, deletes or executes, without mapping it to an allowed set of files?
+    question: Does the function let untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) choose the name or path of a file it reads, writes, deletes or executes, without mapping it to an allowed set of files?
     message: Input chooses which file is used. Map the input to a fixed set of allowed files, or generate the name yourself
     severity: error
 
@@ -60,49 +60,49 @@ rules:
 
   # CWE-78 Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')
   cwe_78:
-    question: Does the function build an operating system command or shell string from caller or user input, or run it through a shell, without escaping it or passing it as separate arguments to an API that bypasses the shell?
+    question: Does the function build an operating system command or shell string from untrusted input (a request, upload, message or another user, not the program's own arguments or configuration), or run it through a shell, without escaping it or passing it as separate arguments to an API that bypasses the shell?
     message: Input reaches a shell command and can run other commands. Pass arguments as a list to an API that does not use the shell, and never interpolate input into a command string
     severity: error
 
   # CWE-79 Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')
   cwe_79:
-    question: Does the function put caller or user input into HTML, JavaScript, a URL or other web page output without escaping or encoding it for that context?
+    question: Does the function put untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) into HTML, JavaScript, a URL or other web page output without escaping or encoding it for that context?
     message: Input is written into a web page without escaping, allowing cross-site scripting. Escape it for the context it lands in, or use a template engine that escapes automatically
     severity: error
 
   # CWE-88 Improper Neutralization of Argument Delimiters in a Command ('Argument Injection')
   cwe_88:
-    question: Does the function pass caller or user input as arguments to a command or program without separating it from options, so a value starting with - or containing spaces or delimiters could add unintended options or arguments?
+    question: Does the function pass untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) as arguments to a command or program without separating it from options, so a value starting with - or containing spaces or delimiters could add unintended options or arguments?
     message: Input can become extra options or arguments to a command. Pass each argument separately, put -- before user values, and reject values starting with -
     severity: error
 
   # CWE-89 Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')
   cwe_89:
-    question: Does the function build a SQL statement by concatenating, formatting or interpolating caller or user input into the query text instead of using bound parameters?
+    question: Does the function build a SQL statement by concatenating, formatting or interpolating untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) into the query text instead of using bound parameters?
     message: Input is written into SQL text, allowing SQL injection. Use bound query parameters for every value
     severity: error
 
   # CWE-90 Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')
   cwe_90:
-    question: Does the function build an LDAP filter or distinguished name from caller or user input without escaping LDAP special characters?
+    question: Does the function build an LDAP filter or distinguished name from untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) without escaping LDAP special characters?
     message: Input is written into an LDAP query without escaping. Escape LDAP special characters, or use an API that binds values safely
     severity: error
 
   # CWE-91 XML Injection (aka Blind XPath Injection)
   cwe_91:
-    question: Does the function build XML or an XPath expression by inserting caller or user input as raw text, without escaping it or using an API that sets values safely?
+    question: Does the function build XML or an XPath expression by inserting untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) as raw text, without escaping it or using an API that sets values safely?
     message: Input is inserted into XML or XPath as raw text and can change its structure. Use an XML API to set values, or escape them, and bind XPath variables
     severity: error
 
   # CWE-93 Improper Neutralization of CRLF Sequences ('CRLF Injection')
   cwe_93:
-    question: Does the function write caller or user input into headers, log lines, emails or other line-based output without removing or rejecting carriage return and line feed characters?
+    question: Does the function write untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) into headers, log lines, emails or other line-based output without removing or rejecting carriage return and line feed characters?
     message: Input with line breaks can inject new headers or lines. Reject or strip carriage returns and line feeds from the input
     severity: warning
 
   # CWE-94 Improper Control of Generation of Code ('Code Injection')
   cwe_94:
-    question: Does the function evaluate, compile or execute code, such as with eval, exec, Function or a template engine, that is built from caller or user input?
+    question: Does the function evaluate, compile or execute code, such as with eval, exec, Function or a template engine, that is built from untrusted input (a request, upload, message or another user, not the program's own arguments or configuration)?
     message: Code built from input is executed, so input can run arbitrary code. Do not evaluate input; parse it as data or dispatch to a fixed set of operations
     severity: error
 
@@ -120,7 +120,7 @@ rules:
 
   # CWE-117 Improper Output Neutralization for Logs
   cwe_117:
-    question: Does the function write caller or user input into a log message without neutralising line breaks or control characters, so an attacker could forge or corrupt log entries?
+    question: Does the function write untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) into a log message without neutralising line breaks or control characters, so an attacker could forge or corrupt log entries?
     message: Input written to logs can forge extra log entries. Log it as a structured field, or strip line breaks and control characters first
     severity: warning
 
@@ -177,7 +177,7 @@ rules:
 
   # CWE-134 Use of Externally-Controlled Format String
   cwe_134:
-    question: Does the function pass a format string that comes from caller or user input to printf, a logger or another formatting function?
+    question: Does the function pass a format string that comes from untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) to printf, a logger or another formatting function?
     message: A format string comes from input, so input can read or write memory or break output. Use a fixed format string and pass input as an argument
     severity: error
 
@@ -192,8 +192,8 @@ rules:
 
   # CWE-140 Improper Neutralization of Delimiters
   cwe_140:
-    question: Does the function join or split data using delimiters such as commas, colons, newlines or pipes, without escaping or rejecting those delimiters when they appear inside the input values?
-    message: A delimiter inside a value can split or merge fields. Escape delimiters in values, or use a format such as JSON or CSV with proper quoting
+    question: Does the function join values into a delimited string, such as CSV, a header, a path list or a composite key, where a value from untrusted input could contain the delimiter and is not escaped?
+    message: An untrusted value could contain the delimiter and split or merge fields. Escape delimiters, or use a format with proper quoting
     severity: warning
 
   # CWE-166 Improper Handling of Missing Special Element
@@ -351,26 +351,26 @@ rules:
 
   # CWE-229 Improper Handling of Values
   cwe_229:
-    question: Does the function read values from input without handling the case where a value is missing, empty, undefined or present more times than expected?
-    message: Missing, empty or repeated values in input are not handled. Check each value's presence and count, and reject the input when it is wrong
+    question: Does the function read values from external input, such as a request, message or parsed document, without handling a value that is missing, empty, null or repeated?
+    message: Missing, empty or repeated values in external input are not handled. Check each value and report which one is wrong
     severity: warning
 
   # CWE-233 Improper Handling of Parameters
   cwe_233:
-    question: Does the function read parameters, fields or arguments from input without handling the case where some are missing, extra or undefined?
-    message: Missing or extra parameters in input are not handled. Validate the set of parameters and reject input that does not match
+    question: Does the function read named parameters or fields from external input, such as a request, message or parsed document, without handling ones that are missing, undefined or unexpected?
+    message: Missing or unexpected fields in external input are not handled. Validate the fields and report which one is wrong
     severity: warning
 
   # CWE-237 Improper Handling of Structural Elements
   cwe_237:
-    question: Does the function process structured input, such as nested objects, arrays or records, without handling malformed, missing or unexpected structural elements?
-    message: Malformed structure in input is not handled. Validate the structure against a schema before using it
+    question: Does the function read nested fields from structured external input, such as a request body, message or parsed document, without checking that they exist and have the expected structure, or validating the whole input against a schema?
+    message: Nested fields of external input are read without checking its structure. Validate the input against a schema first
     severity: warning
 
   # CWE-241 Improper Handling of Unexpected Data Type
   cwe_241:
-    question: Does the function use an input value as a particular type, such as a number, date or list, without checking that it actually is that type and handling it when it is not?
-    message: An input value is used without checking its type. Parse it into the expected type and reject it when parsing fails
+    question: Does the function take a value from external input, such as a request body, message or parsed file, and use it as a particular type, such as a number, date or list, without checking the type or handling a failed conversion with a clear error?
+    message: A value from external input is used without checking its type. Parse it into the expected type and report a clear error when that fails
     severity: warning
 
   # CWE-242 Use of Inherently Dangerous Function
@@ -531,8 +531,8 @@ rules:
 
   # CWE-283 Unverified Ownership
   cwe_283:
-    question: Does the function trust or use a critical resource, such as a configuration file, key file, socket or directory, without checking that it is owned by the expected user or process?
-    message: A critical resource is used without checking who owns it. Verify its owner before trusting its contents
+    question: Does the function trust the contents of a security-critical resource in a location other users can write to, such as a key file, credential file, socket or directory under /tmp, without checking that the expected user owns it?
+    message: A security-critical resource in a shared location is trusted without checking its owner. Verify the owner before trusting its contents
     severity: warning
 
   # CWE-289 Authentication Bypass by Alternate Name
@@ -693,8 +693,8 @@ rules:
 
   # CWE-346 Origin Validation Error
   cwe_346:
-    question: Does the function accept data, messages or requests without verifying where they came from, for example not checking the Origin, message sender, event source or webhook signature?
-    message: The source of data is not verified. Check the origin, sender or signature before trusting it
+    question: Does the function receive data or requests from another system or party, such as a webhook, message queue, cross-origin request or inter-process call, and act on them without verifying who sent them, for example by a signature, token or the Origin header?
+    message: The sender of this data is not verified. Check its signature, token or origin before acting on it
     severity: error
 
   # CWE-347 Improper Verification of Cryptographic Signature
@@ -834,8 +834,8 @@ rules:
 
   # CWE-386 Symbolic Name not Mapping to Correct Object
   cwe_386:
-    question: Does the function refer to an object by a fixed name or path, such as a file, lock or named resource, that could resolve to a different object at different times?
-    message: A fixed name may refer to a different object over time. Keep a handle to the object instead of looking it up by name again
+    question: Does the function look up the same object by name or path more than once, such as checking a file by path and then opening it by path again, where the name could refer to a different object between the lookups?
+    message: The same name is looked up twice and could refer to different objects. Look it up once and keep the handle
     severity: warning
 
   # CWE-390 Detection of Error Condition Without Action
@@ -980,7 +980,7 @@ rules:
 
   # CWE-431 Missing Handler
   cwe_431:
-    question: Does the function lack a handler for an event, exception, message type or case that it can receive, such as a missing default branch?
+    question: Outside tests, does the function lack a handler for an event, message type, exception or enum value that it can evidently receive, such as a dispatch with no default branch?
     message: A case, event or exception that can occur has no handler. Add a handler, even if it only fails safely
     severity: warning
 
@@ -998,8 +998,8 @@ rules:
 
   # CWE-439 Behavioral Change in New Version or Environment
   cwe_439:
-    question: Does the function depend on behaviour of a library, API or platform that differs between versions or environments, without pinning or checking the version?
-    message: The code relies on behaviour that changes between versions or environments. Pin the version, or check for the behaviour you need
+    question: Does the function rely on a private, undocumented or experimental API of a library or platform, such as names starting with an underscore, or on behaviour documented to change between versions, without pinning or checking the version?
+    message: This relies on behaviour that may change between versions. Use the documented API, or pin and check the version
     severity: info
 
   # CWE-440 Expected Behavior Violation
@@ -1097,7 +1097,7 @@ rules:
 
   # CWE-470 Use of Externally-Controlled Input to Select Classes or Code ('Unsafe Reflection')
   cwe_470:
-    question: Does the function use caller or user input to choose which class, module, function or method to load, instantiate or call through reflection or dynamic lookup, without an allow list?
+    question: Does the function use untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) to choose which class, module, function or method to load, instantiate or call through reflection or dynamic lookup, without an allow list?
     message: Input chooses which code to load or call. Map the input to an explicit allow list of classes or functions
     severity: error
 
@@ -1280,7 +1280,7 @@ rules:
 
   # CWE-563 Assignment to Variable without Use
   cwe_563:
-    question: Does the function assign a value to a variable that is never read before being overwritten or going out of scope?
+    question: Does the function assign a value to a named variable that is never read before being overwritten or going out of scope? Ignore assignments to _ or other names used to discard a value on purpose.
     message: A value is assigned and never used. Remove the assignment, or use the value if it was meant to be used
     severity: info
 
@@ -1341,7 +1341,7 @@ rules:
 
   # CWE-601 URL Redirection to Untrusted Site ('Open Redirect')
   cwe_601:
-    question: Does the function redirect the user to a URL taken from caller or user input without checking it against an allow list of destinations?
+    question: Does the function redirect the user to a URL taken from untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) without checking it against an allow list of destinations?
     message: The redirect target comes from input, allowing an open redirect. Redirect only to relative paths or an allow list of hosts
     severity: error
 
@@ -1359,7 +1359,7 @@ rules:
 
   # CWE-606 Unchecked Input for Loop Condition
   cwe_606:
-    question: Does the function use caller or user input as a loop bound or iteration count without limiting it?
+    question: Does the function use untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) as a loop bound or iteration count without limiting it?
     message: Input controls how many times this loop runs. Cap the loop bound to a sensible maximum
     severity: error
 
@@ -1385,8 +1385,8 @@ rules:
 
   # CWE-617 Reachable Assertion
   cwe_617:
-    question: Does the function use an assert or panic that caller or user input can trigger, crashing or exiting the program where a handled error would do?
-    message: Input can trigger an assertion and crash the program. Validate the input and return an error instead
+    question: Does the function use an assert, panic or abort to reject bad input that comes from outside the program, such as file contents, configuration, command-line arguments, a request or a message, where a handled error with a clear message is needed, rather than only to check invariants that only a bug in the code could break?
+    message: Bad input from outside the program is rejected with an assertion, which crashes with a traceback and disappears when assertions are disabled. Raise a specific error and report it clearly instead
     severity: warning
 
   # CWE-618 Exposed Unsafe ActiveX Method
@@ -1409,7 +1409,7 @@ rules:
 
   # CWE-624 Executable Regular Expression Error
   cwe_624:
-    question: Does the function build a regular expression from caller or user input in a way that could enable code execution, such as preg_replace with the e modifier or an eval flag?
+    question: Does the function build a regular expression from untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) in a way that could enable code execution, such as preg_replace with the e modifier or an eval flag?
     message: A regular expression built from input can execute code. Escape input in patterns and never enable evaluation modifiers
     severity: error
     languages:
@@ -1854,7 +1854,7 @@ rules:
 
   # CWE-917 Improper Neutralization of Special Elements used in an Expression Language Statement ('Expression Language Injection')
   cwe_917:
-    question: Does the function build an expression language, template or OGNL expression from caller or user input and evaluate it?
+    question: Does the function build an expression language, template or OGNL expression from untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) and evaluate it?
     message: Input is evaluated as an expression. Never evaluate expressions built from input; pass it as data
     severity: error
     languages:
@@ -1862,7 +1862,7 @@ rules:
 
   # CWE-918 Server-Side Request Forgery (SSRF)
   cwe_918:
-    question: Does the function fetch a URL or connect to a host taken from caller or user input without restricting the destination to allowed hosts?
+    question: Does the function fetch a URL or connect to a host taken from untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) without restricting the destination to allowed hosts?
     message: The server can be made to request arbitrary URLs, including internal ones. Allow only specific hosts, and block internal addresses
     severity: error
 
@@ -2000,8 +2000,8 @@ rules:
 
   # CWE-1052 Excessive Use of Hard-Coded Literals in Initialization
   cwe_1052:
-    question: Does the function initialise data with hard coded literals that are not simple integers or named constants, such as long strings, paths or magic numbers?
-    message: Data is initialised with unnamed literals. Replace them with named constants or configuration
+    question: Outside tests, does the function initialise data with the same long literal, path, URL or magic number used elsewhere, or with one likely to change, instead of a named constant or configuration? Ignore messages, format strings, 0, 1 and empty values.
+    message: Data is initialised with an unnamed literal that is likely to change or is repeated. Replace it with a named constant or configuration
     severity: info
 
   # CWE-1053 Missing Documentation for Design
@@ -2111,8 +2111,8 @@ rules:
 
   # CWE-1072 Data Resource Access without Use of Connection Pooling
   cwe_1072:
-    question: Does the function open a new database connection for its work instead of using a connection pool?
-    message: A new database connection is opened each time. Use a connection pool
+    question: Does the function open a new connection to a database server for each request or operation, instead of reusing a pooled or long-lived connection?
+    message: A new database connection is opened for each operation. Use a connection pool or reuse one connection
     severity: info
 
   # CWE-1073 Non-SQL Invokable Control Element with Excessive Number of Data Resource Accesses
@@ -2202,8 +2202,8 @@ rules:
 
   # CWE-1090 Method Containing Access of a Member Element from Another Class
   cwe_1090:
-    question: Does the function directly access the fields or members of another class's objects instead of calling its methods?
-    message: This reaches into another class's fields. Call a method on that class instead
+    question: Does the function read or modify another class's private or internal members, such as names starting with an underscore, or reach through a chain of several other objects' fields, instead of calling methods on them?
+    message: This reaches into another class's internals. Call a method on that class instead
     severity: info
 
   # CWE-1092 Use of Same Invokable Control Element in Multiple Architectural Layers
@@ -2287,8 +2287,8 @@ rules:
 
   # CWE-1106 Insufficient Use of Symbolic Constants
   cwe_1106:
-    question: Does the function use literal values that may change over time, such as limits, rates, sizes or thresholds, instead of named constants?
-    message: Literal values that may change are scattered in the code. Define named constants for them
+    question: Outside tests, does the function embed a literal limit, timeout, rate, size, threshold or retry count that is likely to change, or repeat the same literal in several places, without a named constant? Ignore messages, format strings, 0, 1 and empty values.
+    message: A value likely to change is a bare literal. Define a named constant for it
     severity: info
 
   # CWE-1107 Insufficient Isolation of Symbolic Constant Definitions
@@ -2357,8 +2357,8 @@ rules:
 
   # CWE-1117 Callable with Insufficient Behavioral Summary
   cwe_1117:
-    question: Does the function lack documentation of its inputs, outputs, side effects, assumptions or error returns, where these are not obvious from its signature?
-    message: The function's behaviour is not summarised. Document its inputs, outputs, side effects and errors
+    question: Is this a public function, not a test or a small private helper, whose inputs, return value, side effects or errors are neither evident from its name and signature nor documented?
+    message: The function's behaviour is not summarised. Document its inputs, return value, side effects and errors
     severity: info
 
   # CWE-1118 Insufficient Documentation of Error Handling Techniques
@@ -2388,8 +2388,8 @@ rules:
 
   # CWE-1123 Excessive Use of Self-Modifying Code
   cwe_1123:
-    question: Does the function modify its own code or other code at runtime, such as monkey patching, rewriting functions or writing executable memory?
-    message: Code is modified at runtime, which makes behaviour hard to predict. Use explicit configuration or dependency injection instead
+    question: Outside tests, does the function change code at runtime, such as monkey patching functions or classes of other modules, replacing methods on existing objects or writing executable memory?
+    message: Code is changed at runtime, which makes behaviour hard to predict. Use explicit configuration or dependency injection instead
     severity: warning
 
   # CWE-1124 Excessively Deep Nesting
@@ -2500,7 +2500,7 @@ rules:
 
   # CWE-1236 Improper Neutralization of Formula Elements in a CSV File
   cwe_1236:
-    question: Does the function write caller or user input into a CSV file without neutralising values starting with =, +, - or @ that a spreadsheet would run as a formula?
+    question: Does the function write untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) into a CSV file without neutralising values starting with =, +, - or @ that a spreadsheet would run as a formula?
     message: Values in this CSV can run as spreadsheet formulas. Prefix values that start with =, +, - or @ with a single quote
     severity: warning
 
@@ -2524,8 +2524,8 @@ rules:
 
   # CWE-1284 Improper Validation of Specified Quantity in Input
   cwe_1284:
-    question: Does the function take a quantity from input, such as a size, length or count, without checking it is within the allowed range before using it?
-    message: A quantity from input is not range checked. Check it is within the allowed minimum and maximum
+    question: Does the function take a quantity, such as a size, length or count, from external input like a request, message or file header, and use it without checking it is within the allowed range?
+    message: A quantity from external input is not range checked. Check it is within the allowed minimum and maximum
     severity: error
 
   # CWE-1285 Improper Validation of Specified Index, Position, or Offset in Input
@@ -2536,26 +2536,26 @@ rules:
 
   # CWE-1286 Improper Validation of Syntactic Correctness of Input
   cwe_1286:
-    question: Does the function accept input that should follow a syntax, such as an email, date, URL or structured format, without checking it is well formed?
-    message: Input is not checked for well-formed syntax. Parse it strictly and reject malformed values
+    question: Does the function accept external input that must follow a syntax, such as an email address, date, URL or structured format from a request, message or file, without checking it is well formed?
+    message: External input is not checked for well-formed syntax. Parse it strictly and reject malformed values with a clear error
     severity: warning
 
   # CWE-1287 Improper Validation of Specified Type of Input
   cwe_1287:
-    question: Does the function accept input that should be a specific type without checking that type, for example trusting that a JSON field is a number or array?
-    message: The input's type is not checked. Check or parse it into the expected type and reject anything else
+    question: Does the function accept a value from external input, such as a JSON or YAML field from a request, message or file, and assume its type, such as a number, list or map, without checking it?
+    message: The type of an external value is assumed. Check or parse it into the expected type and reject anything else
     severity: warning
 
   # CWE-1288 Improper Validation of Consistency within Input
   cwe_1288:
-    question: Does the function accept input with several fields that must be consistent with each other, such as a length and its data, or a start before an end, without checking that they are?
-    message: Related fields in input are not checked for consistency. Check they agree before using them
+    question: Does the function accept external input with several fields that must agree with each other, such as a length and its data, or a start before an end, without checking that they do?
+    message: Related fields in external input are not checked for consistency. Check they agree before using them
     severity: warning
 
   # CWE-1289 Improper Validation of Unsafe Equivalence in Input
   cwe_1289:
-    question: Does the function accept an identifier or reference from input without rejecting values equivalent to unsafe ones, such as encoded .., alternate IP forms or localhost aliases?
-    message: Input equivalent to an unsafe value is not rejected. Normalise it, then check it against the unsafe values
+    question: Does the function take an identifier, path, host or reference from untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) without rejecting values equivalent to unsafe ones, such as encoded .., alternate IP forms or localhost aliases?
+    message: Untrusted input equivalent to an unsafe value is not rejected. Normalise it, then check it against the unsafe values
     severity: error
 
   # CWE-1322 Use of Blocking Code in Single-threaded, Non-blocking Context
@@ -2608,25 +2608,25 @@ rules:
 
   # CWE-23 Relative Path Traversal
   cwe_23:
-    question: Does the function join caller or user input onto a base directory without rejecting or neutralising .. sequences that could climb out of it?
+    question: Does the function join untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) onto a base directory without rejecting or neutralising .. sequences that could climb out of it?
     message: Relative path sequences in input can escape the directory. Resolve the path and check it is still inside the base directory
     severity: error
 
   # CWE-36 Absolute Path Traversal
   cwe_36:
-    question: Does the function join caller or user input onto a base directory where an absolute path in the input would replace the base, such as os.path.join or Path / with an input starting with /?
+    question: Does the function join untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) onto a base directory where an absolute path in the input would replace the base, such as os.path.join or Path / with an input starting with /?
     message: An absolute path in input overrides the base directory. Reject absolute paths, and check the resolved path is inside the base
     severity: error
 
   # CWE-77 Improper Neutralization of Special Elements used in a Command ('Command Injection')
   cwe_77:
-    question: Does the function build a command for an interpreter, shell or other command processor from caller or user input without neutralising special characters?
+    question: Does the function build a command for an interpreter, shell or other command processor from untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) without neutralising special characters?
     message: Input is written into a command without neutralising it. Pass input as separate arguments, or escape it for that command language
     severity: error
 
   # CWE-99 Improper Control of Resource Identifiers ('Resource Injection')
   cwe_99:
-    question: Does the function use caller or user input as the identifier of a resource, such as a file, port, socket, table or queue, without restricting it to allowed values?
+    question: Does the function use untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) as the identifier of a resource, such as a file, port, socket, table or queue, without restricting it to allowed values?
     message: Input chooses which resource is used. Map it to an allow list of resources
     severity: error
 
@@ -2650,7 +2650,7 @@ rules:
 
   # CWE-129 Improper Validation of Array Index
   cwe_129:
-    question: Does the function use caller or user input, or a value derived from it, as an array index without checking it is at least zero and less than the array length?
+    question: Does the function use untrusted input (a request, upload, message or another user, not the program's own arguments or configuration), or a value derived from it, as an array index without checking it is at least zero and less than the array length?
     message: An index from input is not checked. Check it is within the array bounds before use
     severity: error
 
@@ -2761,7 +2761,7 @@ rules:
 
   # CWE-564 SQL Injection: Hibernate
   cwe_564:
-    question: Does the function build a Hibernate, JPA, ORM or HQL query by concatenating caller or user input into the query string?
+    question: Does the function build a Hibernate, JPA, ORM or HQL query by concatenating untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) into the query string?
     message: Input is concatenated into an ORM query. Use named or positional parameters
     severity: error
 
@@ -2787,13 +2787,13 @@ rules:
 
   # CWE-643 Improper Neutralization of Data within XPath Expressions ('XPath Injection')
   cwe_643:
-    question: Does the function build an XPath expression by inserting caller or user input as text instead of binding it as a variable?
+    question: Does the function build an XPath expression by inserting untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) as text instead of binding it as a variable?
     message: Input is written into an XPath expression. Use parameterised XPath with bound variables
     severity: error
 
   # CWE-652 Improper Neutralization of Data within XQuery Expressions ('XQuery Injection')
   cwe_652:
-    question: Does the function build an XQuery expression by inserting caller or user input as text instead of binding it as an external variable?
+    question: Does the function build an XQuery expression by inserting untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) as text instead of binding it as an external variable?
     message: Input is written into an XQuery expression. Bind it as an external variable
     severity: error
 
@@ -2829,8 +2829,8 @@ rules:
 
   # CWE-703 Improper Check or Handling of Exceptional Conditions
   cwe_703:
-    question: Does the function fail to anticipate or handle rare exceptional conditions, such as empty input, missing files, network failure or full disks?
-    message: Rare failure conditions are not handled. Handle them explicitly, or fail with a clear error
+    question: Does the function perform an operation that commonly fails in normal use, such as reading a file, parsing input, a network call or a database query, and either handle some of its failures but miss another common one, or carry on as if it succeeded when it may have failed?
+    message: A common failure of this operation is missed or ignored. Handle it, or let it propagate as a clear error
     severity: warning
 
   # CWE-704 Incorrect Type Conversion or Cast
@@ -2859,8 +2859,8 @@ rules:
 
   # CWE-789 Memory Allocation with Excessive Size Value
   cwe_789:
-    question: Does the function allocate memory with a size from input or computed from input without capping it?
-    message: Memory is allocated with a size from input. Check the size against a maximum first
+    question: Does the function allocate memory, such as a buffer, array, list or string, with a size taken from untrusted input or a length declared in a file or message, without capping it?
+    message: Memory is allocated with a size from untrusted input. Check the size against a maximum first
     severity: error
 
   # CWE-1042 Static Member Data Element outside of a Singleton Class Element

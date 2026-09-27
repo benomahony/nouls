@@ -164,7 +164,7 @@ class Rule(BaseModel):
         if self.metric is not None and self.limit is not None:
             text = check_for(self.metric, self.limit)
         assert text, "The validator guarantees a question or a metric with a limit"
-        assert text.endswith("?"), "A rule's check reads as a question"
+        assert "?" in text, "A rule's check asks a question, perhaps followed by an instruction"
         assert self.question is None or text == self.question, "Questions are shown as written"
         return text
 
