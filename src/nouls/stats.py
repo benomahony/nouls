@@ -355,7 +355,16 @@ def thresholds(rule: str | None = None, *, ask: bool = False, config: ConfigOpti
     loaded, store = open_store(config)
     if rule is not None and rule not in loaded.rules:
         return fail(loaded.unknown_rule(rule))
-    names = [rule] if rule else [name for name, r in loaded.rules.items() if r.enabled]
+    if rule is not None and loaded.rules[rule].question is None:
+        return fail(
+            f"nouls: {rule} measures {loaded.rules[rule].metric} instead of asking a question, "
+            "so it has no threshold to tune. Change its limit in your nouls config instead."
+        )
+    names = (
+        [rule]
+        if rule
+        else [name for name, r in loaded.rules.items() if r.enabled and r.question is not None]
+    )
     assert all(name in loaded.rules for name in names), "Every rule must be configured"
     if ask:
         missing = [

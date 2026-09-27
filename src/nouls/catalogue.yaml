@@ -7,6 +7,11 @@
 # CWE is sponsored by the U.S. Department of Homeland Security and operated by MITRE; see
 # https://cwe.mitre.org/about/termsofuse.html. No endorsement is implied.
 #
+# Most rules ask about each function. Rules with scope: file ask about the whole file, because
+# what they check, such as a file header, imports or class structure, is not inside one function.
+# Rules with a metric and a limit are measured from the syntax tree and never asked, and five
+# rules with scope: project read build, CI and operations files.
+#
 # nouls loads this file after defaults.yaml and before your nouls config, so any rule here can be
 # reworded, retuned or turned off like a default one, for example rules: {cwe_1080: {enabled: false}}.
 
@@ -1155,11 +1160,12 @@ rules:
 
   # CWE-487 Reliance on Package-level Scope
   cwe_487:
-    question: Does the function rely on Java package-private or default visibility to protect sensitive data or operations from other code?
+    question: Does this Java file rely on package-private or default visibility to protect sensitive fields or methods from other code?
     message: Package visibility is not a security boundary. Make sensitive members private and check permissions explicitly
     severity: warning
     languages:
       - java
+    scope: file
 
   # CWE-488 Exposure of Data Element to Wrong Session
   cwe_488:
@@ -1306,11 +1312,12 @@ rules:
 
   # CWE-581 Object Model Violation: Just One of Equals and Hashcode Defined
   cwe_581:
-    question: Does the class or function define equality without a matching hash code, or a hash code without matching equality, so equal objects can have different hashes?
+    question: Does this file define a class that overrides equality without hashing, or hashing without equality, so equal objects can have different hashes?
     message: Equality and hashing disagree, so equal objects can have different hashes. Define both from the same fields
     severity: warning
     languages:
       - java
+    scope: file
 
   # CWE-584 Return Inside Finally Block
   cwe_584:
@@ -1564,9 +1571,10 @@ rules:
 
   # CWE-766 Critical Data Element Declared Public
   cwe_766:
-    question: Does the class or function declare a critical field, such as a password, key, balance or permission, as public?
+    question: Does this file declare a critical field of a class, such as a password, key, balance or permission, as public?
     message: A critical field is public. Make it private and control access through methods
     severity: warning
+    scope: file
 
   # CWE-767 Access to Critical Private Variable via Public Method
   cwe_767:
@@ -1926,15 +1934,17 @@ rules:
 
   # CWE-1041 Use of Redundant Code
   cwe_1041:
-    question: Does the function duplicate code that evidently also exists elsewhere, such as a copied block that should be a shared helper?
-    message: This code looks duplicated. Move it into a shared function and call that
+    question: Does this file contain two or more blocks of code that are the same or nearly the same, which should be one shared function?
+    message: Some code in this file is duplicated. Move it into one shared function and call that
     severity: info
+    scope: file
 
   # CWE-1043 Data Element Aggregating an Excessively Large Number of Non-Primitive Elements
   cwe_1043:
-    question: Does the function define or build a data structure with an excessively large number of nested non-primitive fields, such as more than five structures or objects?
-    message: This data structure has too many nested non-primitive fields. Split it into smaller, focused structures
+    question: Does this file define a data structure or class with more than five fields that are themselves structures, objects or collections?
+    message: A data structure here has too many non-primitive fields. Split it into smaller, focused structures
     severity: info
+    scope: file
 
   # CWE-1044 Architecture with Number of Horizontal Layers Outside of Expected Range
   cwe_1044:
@@ -1944,11 +1954,12 @@ rules:
 
   # CWE-1045 Parent Class with a Virtual Destructor and a Child Class without a Virtual Destructor
   cwe_1045:
-    question: Is this a class destructor in a subclass whose parent has a virtual destructor, where the subclass destructor is not virtual or override?
-    message: The child class destructor is not virtual while the parent's is. Mark it virtual or override
+    question: Does this file define a C++ class whose parent has a virtual destructor while its own destructor is declared without virtual or override?
+    message: A child class destructor is not virtual while its parent's is. Mark it virtual or override
     severity: warning
     languages:
       - cpp
+    scope: file
 
   # CWE-1046 Creation of Immutable Text Using String Concatenation
   cwe_1046:
@@ -1958,9 +1969,10 @@ rules:
 
   # CWE-1047 Modules with Circular Dependencies
   cwe_1047:
-    question: Does the function import or call a module that evidently imports this function's own module, creating a circular dependency?
-    message: This creates a circular dependency between modules. Move the shared code into a third module both can depend on
+    question: Does this file import a module that evidently imports this file's own module back, directly or through deferred imports placed to avoid a cycle?
+    message: This file is part of a circular dependency. Move the shared code into a module both can depend on
     severity: info
+    scope: file
 
   # CWE-1048 Invokable Control Element with Large Number of Outward Calls
   cwe_1048:
@@ -1994,9 +2006,10 @@ rules:
 
   # CWE-1053 Missing Documentation for Design
   cwe_1053:
-    question: Is the function complex or architecturally significant yet has no docstring or comment explaining its design or purpose?
-    message: This significant function has no documentation of its design. Add a docstring explaining what it does and why
+    question: Is this file a module with complex or architecturally significant code but no module-level documentation of what it is for and how it fits into the design?
+    message: This module does not document its design. Add a module docstring or header comment explaining its purpose and how it fits in
     severity: info
+    scope: file
 
   # CWE-1054 Invocation of a Control Element at an Unnecessarily Deep Horizontal Layer
   cwe_1054:
@@ -2006,13 +2019,15 @@ rules:
 
   # CWE-1055 Multiple Inheritance from Concrete Classes
   cwe_1055:
-    question: Does the class or function define a class that inherits from more than one concrete class?
-    message: This class inherits from more than one concrete class. Inherit from one class and compose or use interfaces for the rest
+    question: Does this file define a class that inherits from more than one concrete, non-abstract class?
+    message: A class inherits from more than one concrete class. Inherit from one class and compose or use interfaces for the rest
     severity: info
+    scope: file
 
   # CWE-1056 Invokable Control Element with Variadic Parameters
   cwe_1056:
-    question: Does the function accept a variable number of arguments, such as *args, varargs or ..., where a fixed signature would be clearer?
+    metric: variadic_parameters
+    limit: 0
     message: The function takes a variable number of arguments. Use explicit parameters, or a single collection parameter
     severity: info
 
@@ -2036,20 +2051,23 @@ rules:
 
   # CWE-1062 Parent Class with References to Child Class
   cwe_1062:
-    question: Does the function, in a parent class, refer to a subclass, its methods or its members?
+    question: Does this file define a parent class that refers to one of its own subclasses, their methods or members?
     message: A parent class depends on its child class. Move the behaviour into the child, or use an overridable method
     severity: warning
+    scope: file
 
   # CWE-1063 Creation of Class Instance within a Static Code Block
   cwe_1063:
-    question: Does the function or static initialiser create class instances inside a static block or at import time?
-    message: An instance is created in a static block or at import time. Create it lazily, or pass it in where needed
+    question: Does this file create class instances in a static initialiser block or at module import time, rather than when they are needed?
+    message: Instances are created in a static block or at import time. Create them lazily, or pass them in where needed
     severity: info
+    scope: file
 
   # CWE-1064 Invokable Control Element with Signature Containing an Excessive Number of Parameters
   cwe_1064:
-    question: Does the function take an excessive number of parameters, such as more than seven?
-    message: The function has too many parameters. Group related parameters into an object, or split the function
+    metric: parameters
+    limit: 7
+    message: The function has more parameters than the limit. Group related parameters into an object, or split the function
     severity: info
 
   # CWE-1065 Runtime Resource Management Control Element in a Component Built to Run on Application Servers
@@ -2060,9 +2078,10 @@ rules:
 
   # CWE-1066 Missing Serialization Control Element
   cwe_1066:
-    question: Is this a serialisable class or data element that lacks an explicit serialisation method or version where one is expected?
-    message: This serialisable type has no serialisation control. Define an explicit serialisation method or version
+    question: Does this file define a serialisable class that lacks an explicit serialisation method or version where the language expects one, such as serialVersionUID in Java?
+    message: A serialisable class has no serialisation control. Define an explicit serialisation method or version
     severity: info
+    scope: file
 
   # CWE-1067 Excessive Execution of Sequential Searches of Data Resource
   cwe_1067:
@@ -2078,14 +2097,16 @@ rules:
 
   # CWE-1070 Serializable Data Element Containing non-Serializable Item Elements
   cwe_1070:
-    question: Is this a serialisable class or field that contains members that cannot be serialised, such as locks, sockets, file handles or non-serialisable objects?
-    message: A serialisable type holds members that cannot be serialised. Mark them transient, or replace them with serialisable data
+    question: Does this file define a serialisable class with fields that cannot be serialised, such as locks, sockets, file handles or connections?
+    message: A serialisable class holds fields that cannot be serialised. Mark them transient, or replace them with serialisable data
     severity: warning
+    scope: file
 
   # CWE-1071 Empty Code Block
   cwe_1071:
-    question: Does the function contain an empty block, such as an empty if, loop, else or exception handler, that suggests missing code?
-    message: This block is empty, which may be unfinished code. Fill it in, or remove it and explain why nothing is needed
+    metric: empty_blocks
+    limit: 0
+    message: A block is empty, which may be unfinished code. Fill it in, or add a comment explaining why nothing is needed
     severity: warning
 
   # CWE-1072 Data Resource Access without Use of Connection Pooling
@@ -2102,29 +2123,34 @@ rules:
 
   # CWE-1074 Class with Excessively Deep Inheritance
   cwe_1074:
-    question: Does the function define a class with a very deep inheritance chain, such as more than seven ancestors?
-    message: The inheritance chain is too deep. Flatten the hierarchy and prefer composition
+    question: Does this file define a class with more than seven ancestor classes?
+    message: A class in this file has too deep an inheritance chain. Flatten the hierarchy and prefer composition
     severity: info
+    scope: file
 
   # CWE-1075 Unconditional Control Flow Transfer outside of Switch Block
   cwe_1075:
-    question: Does the function use an unconditional jump, such as goto, outside a switch or structured error handling block?
-    message: An unconditional jump makes control flow hard to follow. Use structured control flow instead
+    metric: gotos
+    limit: 0
+    message: A goto makes control flow hard to follow. Use structured control flow instead
     severity: warning
 
   # CWE-1079 Parent Class without Virtual Destructor Method
   cwe_1079:
-    question: Does the function define a base class with subclasses, or intended for subclassing, whose destructor is not virtual?
-    message: The base class destructor is not virtual, so deleting through a base pointer skips the child's destructor. Make it virtual
+    question: Does this file define a C++ class that has subclasses, or is evidently meant to be subclassed, whose destructor is not virtual?
+    message: A base class destructor is not virtual, so deleting through a base pointer skips the child's destructor. Make it virtual
     severity: warning
     languages:
       - cpp
+    scope: file
 
   # CWE-1080 Source Code File with Excessive Number of Lines of Code
   cwe_1080:
-    question: Is the function part of a source file that is evidently very long, for example with line numbers or references suggesting more than 1000 lines?
-    message: The source file is very long. Split it into smaller, focused modules
+    metric: lines
+    limit: 1000
+    message: This file has more lines of code than the limit. Split it into smaller, focused modules
     severity: info
+    scope: file
 
   # CWE-1082 Class Instance Self Destruction Control Element
   cwe_1082:
@@ -2154,17 +2180,19 @@ rules:
 
   # CWE-1086 Class with Excessive Number of Child Classes
   cwe_1086:
-    question: Does the function define a base class evidently meant to have a very large number of direct subclasses, such as more than ten?
-    message: This class has too many direct subclasses. Reorganise the hierarchy or use composition
+    question: Does this file define a class with more than ten direct subclasses?
+    message: A class in this file has too many direct subclasses. Reorganise the hierarchy or use composition
     severity: info
+    scope: file
 
   # CWE-1087 Class with Virtual Method without a Virtual Destructor
   cwe_1087:
-    question: Does the function define a class with virtual methods but no virtual destructor?
-    message: The class has virtual methods but no virtual destructor. Add a virtual destructor
+    question: Does this file define a C++ class that has virtual methods but no virtual destructor?
+    message: A class has virtual methods but no virtual destructor. Add a virtual destructor
     severity: warning
     languages:
       - cpp
+    scope: file
 
   # CWE-1089 Large Data Table with Excessive Number of Indices
   cwe_1089:
@@ -2198,29 +2226,33 @@ rules:
 
   # CWE-1097 Persistent Storable Data Element without Associated Comparison Control Element
   cwe_1097:
-    question: Is this a type stored persistently or used as a key, such as an entity or record, that lacks the equality, hashing or comparison methods needed to compare instances correctly?
-    message: This stored type cannot be compared correctly. Define equality, and hashing or ordering where needed
+    question: Does this file define a class that is stored persistently or used as a key, such as an entity or record, without the equality, hashing or ordering methods needed to compare instances?
+    message: A stored class cannot be compared correctly. Define equality, and hashing or ordering where needed
     severity: info
+    scope: file
 
   # CWE-1098 Data Element containing Pointer Item without Proper Copy Control Element
   cwe_1098:
-    question: Does the function define a type that holds a raw pointer or owned resource without defining how it is copied, such as a copy constructor or assignment, so copies share or double free the resource?
-    message: Copies of this type share the pointer it owns. Define copy and assignment, delete them, or use a smart pointer
+    question: Does this file define a C++ class that owns a raw pointer or resource without defining or deleting its copy constructor and copy assignment?
+    message: Copies of this class share the pointer it owns. Define copy and assignment, delete them, or use a smart pointer
     severity: warning
     languages:
       - cpp
+    scope: file
 
   # CWE-1099 Inconsistent Naming Conventions for Identifiers
   cwe_1099:
-    question: Does the function use naming conventions inconsistent with each other or with the surrounding code, such as mixing camelCase and snake_case or different names for the same concept?
-    message: Names here do not follow a consistent convention. Use one convention and one name per concept
+    question: Does this file name things inconsistently, such as mixing camelCase and snake_case for the same kind of name, or using different names for the same concept?
+    message: Names in this file follow inconsistent conventions. Use one convention and one name per concept
     severity: info
+    scope: file
 
   # CWE-1100 Insufficient Isolation of System-Dependent Functions
   cwe_1100:
-    question: Does the function mix system-dependent calls, such as operating system or platform specific APIs, directly into general logic instead of isolating them in a separate module?
-    message: System-dependent code is mixed into general logic. Move it behind a small platform module
+    question: Does this file mix operating system or platform specific calls into general logic in several places, instead of isolating them in one module or function?
+    message: System-dependent code is scattered through this file. Move it behind one small platform module
     severity: info
+    scope: file
 
   # CWE-1101 Reliance on Runtime Component in Generated Code
   cwe_1101:
@@ -2248,9 +2280,10 @@ rules:
 
   # CWE-1105 Insufficient Encapsulation of Machine-Dependent Functionality
   cwe_1105:
-    question: Does the function use machine-dependent functionality, such as inline assembly, intrinsics or hardware registers, without encapsulating it behind an abstraction?
-    message: Machine-dependent code is not encapsulated. Put it behind a small interface
+    question: Does this file use machine-dependent functionality, such as inline assembly, intrinsics or hardware registers, in several places without encapsulating it?
+    message: Machine-dependent code is not encapsulated in this file. Put it behind a small interface
     severity: info
+    scope: file
 
   # CWE-1106 Insufficient Use of Symbolic Constants
   cwe_1106:
@@ -2260,9 +2293,10 @@ rules:
 
   # CWE-1107 Insufficient Isolation of Symbolic Constant Definitions
   cwe_1107:
-    question: Does the function define symbolic constants locally that evidently belong in a central place, or define the same constant differently from elsewhere?
-    message: Constants are defined locally instead of in one place. Move them into a shared constants module
+    question: Does this file define the same constant more than once, or scatter constant definitions through its functions instead of grouping them in one place?
+    message: Constants in this file are duplicated or scattered. Define each once, together, or in a shared constants module
     severity: info
+    scope: file
 
   # CWE-1108 Excessive Reliance on Global Variables
   cwe_1108:
@@ -2296,21 +2330,24 @@ rules:
 
   # CWE-1113 Inappropriate Comment Style
   cwe_1113:
-    question: Does the function use comment styles or formats inconsistent with the rest of the codebase or the language's standard docstring style?
-    message: Comments here do not follow the project's style. Use the standard comment and docstring format
+    question: Does this file use comment or docstring styles that are inconsistent with each other or with the language's standard format?
+    message: Comments in this file use inconsistent styles. Use one standard comment and docstring format
     severity: info
+    scope: file
 
   # CWE-1114 Inappropriate Whitespace Style
   cwe_1114:
-    question: Does the function use inconsistent whitespace or indentation, such as mixed tabs and spaces or irregular indentation?
-    message: Whitespace is inconsistent. Run the project formatter
+    question: Does this file use inconsistent whitespace or indentation, such as mixed tabs and spaces or different indentation widths?
+    message: Whitespace in this file is inconsistent. Run the project formatter
     severity: info
+    scope: file
 
   # CWE-1115 Source Code Element without Standard Prologue
   cwe_1115:
-    question: Does the source element lack the standard header or prologue the project uses, such as a licence or copyright notice or module description?
-    message: The standard header or prologue is missing. Add the project's standard header
+    question: Does this file lack a standard header, such as a copyright or licence notice and a summary of what the module is for, at its top?
+    message: This file has no standard header. Add the project's header, with its copyright or licence notice and what the module is for
     severity: info
+    scope: file
 
   # CWE-1116 Inaccurate Source Code Comments
   cwe_1116:
@@ -2338,8 +2375,9 @@ rules:
 
   # CWE-1121 Excessive McCabe Cyclomatic Complexity
   cwe_1121:
-    question: Does the function have high cyclomatic complexity, with many branches, loops and conditions, such as more than ten decision points?
-    message: The function has too many branches to follow. Split it into smaller functions
+    metric: complexity
+    limit: 10
+    message: The function has more paths through it than the limit. Split it into smaller functions
     severity: warning
 
   # CWE-1122 Excessive Halstead Complexity
@@ -2356,8 +2394,9 @@ rules:
 
   # CWE-1124 Excessively Deep Nesting
   cwe_1124:
-    question: Does the function nest conditionals or loops more deeply than about five levels?
-    message: Nesting is too deep to follow. Use early returns or extract inner blocks into functions
+    metric: nesting
+    limit: 5
+    message: Control structures nest deeper than the limit. Use early returns or extract inner blocks into functions
     severity: warning
 
   # CWE-1125 Excessive Attack Surface
@@ -2826,9 +2865,10 @@ rules:
 
   # CWE-1042 Static Member Data Element outside of a Singleton Class Element
   cwe_1042:
-    question: Does the function define or modify a static, non-final member in a class that is not a singleton?
-    message: A mutable static member makes instances share state. Make it an instance member, or make it constant
+    question: Does this file define a class with a static or class-level member that is mutable, in a class that is not a singleton?
+    message: A mutable static member makes every instance share state. Make it an instance member, or make it constant
     severity: warning
+    scope: file
 
   # CWE-1077 Floating Point Comparison with Incorrect Operator
   cwe_1077:
@@ -2862,9 +2902,10 @@ rules:
 
   # EXT-BUILD-002 Unresolved binding
   ext_build_002:
-    question: Does the function refer to a name, module, package or symbol that is not defined, imported or available, without a guarded fallback?
-    message: A referenced name or module cannot be resolved. Import or define it, or guard the import with a supported fallback
+    question: Does this file use a name, module or attribute that is neither defined in the file, imported by it, a parameter nor a builtin of its language, without a guarded fallback?
+    message: A name used here is never defined or imported. Import or define it, or fix the spelling
     severity: error
+    scope: file
 
   # EXT-BUILD-003 Type incompatibility
   ext_build_003:
@@ -3036,15 +3077,17 @@ rules:
 
   # EXT-ARCH-001 Dependency boundary violation
   ext_arch_001:
-    question: Does the function import or call across an architectural boundary the codebase evidently forbids, such as domain code importing infrastructure, a web framework or a database driver directly?
-    message: This dependency crosses a forbidden architectural boundary. Depend on an interface in the allowed layer instead
+    question: Does this file import across an architectural boundary its own layout evidently forbids, such as domain code importing a web framework, database driver or other infrastructure directly?
+    message: This file depends across a forbidden architectural boundary. Depend on an interface in the allowed layer instead
     severity: warning
+    scope: file
 
   # EXT-ARCH-002 Dependency cycle forbidden by policy
   ext_arch_002:
-    question: Does the function create a dependency from a lower layer back to a higher one, such as a repository calling a controller, forming a cycle between layers?
-    message: This creates a dependency cycle between layers. Invert the dependency with an interface or event
+    question: Does this file, belonging to a lower layer such as storage or domain code, import a higher layer such as a controller, command line or user interface module?
+    message: A lower layer imports a higher one, creating a cycle between layers. Invert the dependency with an interface or event
     severity: warning
+    scope: file
 
   # EXT-ARCH-003 Unsupported platform assumption
   ext_arch_003:

@@ -57,14 +57,16 @@ They only run on files matching the default test patterns, such as `test_*.py`, 
 
 nouls also asks one question for every entry of the engineering error catalogue: 443 weaknesses from the [CWE-699](https://cwe.mitre.org/data/definitions/699.html) and [CWE-1305](https://cwe.mitre.org/data/definitions/1305.html) views of MITRE's Common Weakness Enumeration, and 32 engineering extensions covering build, domain, distributed systems, delivery, architecture, verification, observability and human interaction. Each rule is named after its entry in lower case, such as `cwe_89` for SQL injection or `ext_distributed_001` for a non-idempotent replay, and lives in `src/nouls/catalogue.yaml`.
 
-These rules are on by default, so a function is asked more than 400 questions rather than 14. That costs more tokens the first time each function is checked, but after that only edited functions are asked again. Rules for weaknesses that only exist in C and C++, such as buffer overflows and use after free, are only asked about C and C++. A handful ask about the project's build, CI and operations files instead of about functions.
+These rules are on by default, so a function is asked around 400 questions rather than 14. That costs more tokens the first time each function is checked, but after that only edited functions are asked again. Rules for weaknesses that only exist in C and C++, such as buffer overflows and use after free, are only asked about C and C++. Rules about what one function cannot show, such as the file header, imports, duplicated code or class structure, are asked once about the whole file. A handful ask about the project's build, CI and operations files.
+
+Seven rules are measured from the syntax tree instead of asked, so they cost nothing and are exact: lines of code per file (`cwe_1080`, limit 1000), parameters (`cwe_1064`, 7), cyclomatic complexity (`cwe_1121`, 10), nesting depth (`cwe_1124`, 5), variadic parameters (`cwe_1056`, 0), empty blocks (`cwe_1071`, 0) and gotos (`cwe_1075`, 0). The limits are CISQ's defaults where CWE quotes one, McCabe's original 10 for complexity, and 5 for nesting. Their findings show what was measured, such as `(parameters: 9, limit 7)`.
 
 Catalogue rules merge like the defaults, so reword, retune or turn them off in your nouls config:
 
 ```yaml
 rules:
   cwe_1080:
-    enabled: false
+    limit: 1500
   cwe_89:
     threshold: 0.9
 ```
@@ -153,7 +155,7 @@ rules:
 
 `files` limits a rule to file names or paths matching any of its globs. Setting it replaces the default list.
 
-`scope: project` asks a rule once about the whole project instead of once per function, and `scope: setting` asks it once about every line of the matching files that sets something, skipping comments, headers and lines that only open a block. Their `files` are globs relative to the project root, the nearest directory above the target with a `.git` or nouls config, and they are read even when `exclude` would skip them. A project finding sits on line 1 of the first match in the order the globs are listed, and a setting finding on its own line. The language server checks both when you open or save one of their files, and `nouls label` takes the setting's line.
+`scope: file` asks a rule once about each whole source file instead of once per function, for things no single function shows, such as imports, headers or duplication. `scope: project` asks a rule once about the whole project instead of once per function, and `scope: setting` asks it once about every line of the matching files that sets something, skipping comments, headers and lines that only open a block. Their `files` are globs relative to the project root, the nearest directory above the target with a `.git` or nouls config, and they are read even when `exclude` would skip them. A project finding sits on line 1 of the first match in the order the globs are listed, and a setting finding on its own line. The language server checks both when you open or save one of their files, and `nouls label` takes the setting's line.
 
 nouls detects each file's language from its name, using [tree-sitter-language-pack](https://github.com/Goldziher/tree-sitter-language-pack), and finds functions with the grammar's tags query, so any language whose grammar marks functions works without configuration. Files in languages without function tags, such as Markdown, YAML and plain text, are skipped. A `languages` entry only adds what detection cannot know: `extensions` maps extra file endings to the language, and `units` lists the node types to send as individual questions, replacing the tags query where it misses functions, as it does for C, C++, JavaScript and TypeScript. The diagnostic sits on the node's `name` field, or its first line when it has none.
 
@@ -163,7 +165,23 @@ Every question is answered against this state:
 {"language": "python", "function": "<source of the unit>"}
 ```
 
-Write questions as a single yes/no judgement about that function.
+Write questions as a single yes/no judgement about that function. File rules get the whole file instead:
+
+```json
+{"language": "python", "file": "<the file's text>"}
+```
+
+A rule can measure instead of ask. Give it a `metric` and a `limit` in place of a `question`, and it fires when the function or file measures above the limit, with no model call:
+
+```yaml
+rules:
+  long_signature:
+    metric: parameters
+    limit: 4
+    message: The function takes more than four parameters. Group related ones into an object
+```
+
+The metrics are `parameters`, `complexity` (cyclomatic, counting branches, loops, cases, catches, ternaries and `&&`/`||`), `nesting` (control structures inside each other, where `else if` does not nest), `variadic_parameters`, `empty_blocks` (a block with a comment in it is not empty) and `gotos`, all per function, and `lines` of code per file, which needs `scope: file`. `self`, `cls`, `this` and C's `void` are not counted as parameters.
 
 Project rules are answered against the matching files, keyed by path relative to the project root:
 

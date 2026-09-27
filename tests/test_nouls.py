@@ -12,7 +12,7 @@ from nouls.config import Config, load_config
 from nouls.stats import SAMPLE, SampleRow, score
 from nouls.store import Store
 from nouls.units import extract_units
-from tests.conftest import APP, PYTHON, PYTHON_FUNCTIONS, FakeClient, as_client
+from tests.conftest import APP, PYTHON, PYTHON_CALLS, FakeClient, as_client
 
 pytestmark = pytest.mark.unit
 
@@ -26,7 +26,7 @@ async def test_flags_only_the_offending_function(config: Config, store: Store) -
     assert [(f.rule, f.severity, f.span.line, f.span.column) for f in findings] == [
         ("unit_mismatch", "error", 4, 8)
     ]
-    assert len(client.calls) == PYTHON_FUNCTIONS
+    assert len(client.calls) == PYTHON_CALLS
 
 
 async def test_unchanged_functions_are_cached_across_processes(
@@ -41,10 +41,11 @@ async def test_unchanged_functions_are_cached_across_processes(
         "python",
         APP,
     )
-    assert len(client.calls) == PYTHON_FUNCTIONS + 1
+    assert len(client.calls) == PYTHON_CALLS + 2, "The edited function and file are asked again"
     ((asked, cached),) = reopened.query(tuple[int, int], "SELECT SUM(asked), SUM(cached) FROM runs")
-    rules = len(config.rules_for("python", APP))
-    assert (asked, cached) == (3 * rules, rules)
+    function = sum(bool(r.question) for r in config.rules_for("python", APP).values())
+    whole = sum(bool(r.question) for r in config.rules_for("python", APP, "file").values())
+    assert (asked, cached) == (3 * function + 2 * whole, function)
 
 
 async def test_rewording_one_rule_only_reasks_that_rule(config: Config, store: Store) -> None:
@@ -54,7 +55,7 @@ async def test_rewording_one_rule_only_reasks_that_rule(config: Config, store: S
     _ = await analyser.analyse(PYTHON, "python", APP)
     config.rules["unit_mismatch"].question = "Are seconds mixed with milliseconds?"
     _ = await analyser.analyse(PYTHON, "python", APP)
-    assert [call.questions for call in client.calls[2:]] == [
+    assert [call.questions for call in client.calls[PYTHON_CALLS:]] == [
         {"unit_mismatch"},
         {"unit_mismatch"},
     ]
@@ -253,7 +254,7 @@ def test_project_yaml_turns_off_catalogue_rules(tmp_path: Path) -> None:
     rules = config.rules_for("python", Path("app.py"))
     assert "cwe_1080" not in rules
     assert rules["cwe_89"].severity == "warning"
-    assert rules["cwe_89"].question.startswith("Does the function build a SQL statement")
+    assert (rules["cwe_89"].question or "").startswith("Does the function build a SQL statement")
 
 
 def test_score_counts_precision_and_recall() -> None:

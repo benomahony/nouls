@@ -4,19 +4,38 @@
 
 import asyncio
 import json
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
 
 from typesafe_sdk import AsyncTypeSafeClient, Noul
 
 from nouls.config import Config, Rule, Severity, project_files
+from nouls.metrics import Metric, describe
 from nouls.settings import settings_in
 from nouls.store import DIGEST_LENGTH, Observation, RunStats, Store, digest
-from nouls.units import Span, extract_units
+from nouls.units import Span, extract_units, file_metrics
 
 PROJECT = "project"
 SETTING = "setting"
+FILE = "file:"
+WHOLE_FILE = Span(0, 0, 0, 0)
+
+
+def file_kind(language: str) -> str:
+    """Name the kind of unit a whole source file is, for hashing and state.
+
+    Args:
+        language: The file's language.
+
+    Returns:
+        ``file:`` followed by the language, such as ``file:python``.
+
+    """
+    assert language, "file_kind needs the file's language"
+    assert not language.startswith(FILE), "file_kind takes a language, not a file kind"
+    return FILE + language
 
 
 @dataclass(frozen=True)
@@ -29,23 +48,26 @@ class Finding:
     probability: float
     span: Span
     unit_hash: str
+    detail: str | None = None
 
     def describe(self, *, show_probability: bool) -> str:
-        """Say what the finding means, optionally with its probability.
+        """Say what the finding means, with what was measured or optionally its probability.
 
         Args:
-            show_probability: Whether to append the model's probability.
+            show_probability: Whether to append the model's probability to a question's finding.
 
         Returns:
-            The rule's message, followed by the probability when asked for.
+            The rule's message, followed by the measurement for a metric rule, or the
+            probability when asked for.
 
         """
         assert self.message, "Finding must have a message"
-        text = (
-            f"{self.message} (Probability: {self.probability:.0%})"
-            if show_probability
-            else self.message
-        )
+        if self.detail:
+            text = f"{self.message} ({self.detail})"
+        elif show_probability:
+            text = f"{self.message} (Probability: {self.probability:.0%})"
+        else:
+            text = self.message
         assert text.startswith(self.message), "Description must lead with the message"
         return text
 
@@ -60,6 +82,19 @@ class Target:
     unit_hash: str
 
 
+@dataclass(frozen=True)
+class Subject:
+    """One function or whole file to answer rules about, and where its findings go."""
+
+    kind: str
+    source: str
+    rules: dict[str, Rule]
+    measured: Mapping[Metric, int]
+    name: str
+    line: int
+    span: Span
+
+
 @dataclass
 class Asked:
     """The answers for one unit, and what asking for them cost."""
@@ -68,6 +103,7 @@ class Asked:
     asked: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
+    details: dict[str, str] = field(default_factory=dict[str, str])
 
 
 def unit_hash(language: str, source: str) -> str:
@@ -119,7 +155,9 @@ def state_for(language: str, source: str) -> dict[str, str | dict[str, str]]:
         source: The unit's source, or the project's files as JSON.
 
     Returns:
-        ``{"files": ...}`` for project rules, otherwise ``{"language": ..., "function": ...}``.
+        ``{"files": ...}`` for project rules, the file and line for setting rules,
+        ``{"language": ..., "file": ...}`` for file rules, otherwise
+        ``{"language": ..., "function": ...}``.
 
     """
     assert source, "state_for needs source text; pass the unit or project source that was hashed"
@@ -128,6 +166,8 @@ def state_for(language: str, source: str) -> dict[str, str | dict[str, str]]:
         state = {"files": cast("dict[str, str]", json.loads(source))}
     elif language == SETTING:
         state = dict(cast("dict[str, str]", json.loads(source)))
+    elif language.startswith(FILE):
+        state = {"language": language.removeprefix(FILE), "file": source}
     else:
         state = {"language": language, "function": source}
     assert state, "state_for built an empty state; both branches must set at least one key"
@@ -135,17 +175,21 @@ def state_for(language: str, source: str) -> dict[str, str | dict[str, str]]:
 
 
 def question_hash(rule: Rule) -> str:
-    """Identify a rule's current wording.
+    """Identify a rule's current wording, or its metric and limit.
 
     Args:
-        rule: The rule whose question is hashed.
+        rule: The rule whose check is hashed.
 
     Returns:
-        A digest that changes whenever the question is reworded.
+        A digest that changes whenever the question is reworded or the limit changes.
 
     """
-    assert rule.question.strip(), "Rule question must not be blank"
-    value = digest(rule.question)
+    value = (
+        digest(rule.question)
+        if rule.question is not None
+        else digest("metric", str(rule.metric), str(rule.limit))
+    )
+    assert rule.question is not None or rule.metric is not None, "A rule decides some way"
     assert len(value) == DIGEST_LENGTH, "Question hash must be a digest"
     return value
 
@@ -202,6 +246,7 @@ class Analyser:
 
         """
         assert rules, "At least one rule must be asked"
+        assert all(rule.question for rule in rules.values()), "Only question rules are asked"
         model = self.config.model
         hashes = {name: question_hash(rule) for name, rule in rules.items()}
         uhash = unit_hash(language, source)
@@ -215,7 +260,9 @@ class Analyser:
             response = await self.client.system_one(
                 state=state_for(language, source),
                 questions={
-                    name: Noul(instructions=rule.question) for name, rule in missing.items()
+                    name: Noul(instructions=question)
+                    for name, rule in missing.items()
+                    if (question := rule.question)
                 },
                 model=model,
             )
@@ -228,8 +275,29 @@ class Analyser:
         assert set(result.probabilities) == set(rules), "Every rule must have an answer"
         return result
 
+    async def answer(self, subject: Subject) -> Asked:
+        """Answer every rule about a function or file: measure metrics and ask questions.
+
+        Args:
+            subject: The function or file, with its rules and measurements.
+
+        Returns:
+            A probability for every rule, 1 or 0 for metrics, with what each metric measured.
+
+        """
+        questions = {name: rule for name, rule in subject.rules.items() if rule.question}
+        result = await self.ask(subject.kind, subject.source, questions) if questions else Asked({})
+        for name, rule in subject.rules.items():
+            if rule.metric is not None and rule.limit is not None:
+                value = subject.measured[rule.metric]
+                result.probabilities[name] = float(value > rule.limit)
+                result.details[name] = describe(rule.metric, value, rule.limit)
+        assert set(result.probabilities) == set(subject.rules), "Every rule must have an answer"
+        assert set(result.details) <= set(subject.rules), "Only answered rules have details"
+        return result
+
     async def analyse(self, text: str, language: str, path: Path) -> list[Finding]:
-        """Check every function in a file.
+        """Check every function in a file, and the file as a whole.
 
         Args:
             text: The file's current text.
@@ -242,26 +310,39 @@ class Analyser:
         """
         assert language, "analyse needs a language name; get one from Config.language_for(path)"
         rules = self.config.rules_for(language, path)
-        if not rules:
+        whole = self.config.rules_for(language, path, "file")
+        parsed = self.config.language(language)
+        units = extract_units(text, parsed, tests=self.config.is_test(path)) if rules else []
+        subjects = [
+            Subject(language, u.source, rules, u.metrics, u.name, u.first_line, u.span)
+            for u in units
+        ]
+        if whole and text.strip():
+            measured = file_metrics(text, parsed)
+            subjects.append(
+                Subject(file_kind(language), text, whole, measured, path.name, 0, WHOLE_FILE)
+            )
+        if not subjects:
             return []
-        units = extract_units(text, self.config.language(language), tests=self.config.is_test(path))
-        hashes = [unit_hash(language, unit.source) for unit in units]
-        assert len(hashes) == len(units), "Every unit must have a hash"
-        self.store.save_units(
-            language, list(zip(hashes, (unit.source for unit in units), strict=True))
-        )
-        results = await asyncio.gather(*(self.ask(language, unit.source, rules) for unit in units))
-        assert len(results) == len(units), "Every unit must have an ask result"
+        hashes = [unit_hash(subject.kind, subject.source) for subject in subjects]
+        for kind in dict.fromkeys(subject.kind for subject in subjects):
+            self.store.save_units(
+                kind,
+                [(h, s.source) for h, s in zip(hashes, subjects, strict=True) if s.kind == kind],
+            )
+        results = await asyncio.gather(*(self.answer(subject) for subject in subjects))
         labels = self.store.labels(hashes)
         observations: list[Observation] = []
         findings: list[Finding] = []
-        for unit, uhash, result in zip(units, hashes, results, strict=True):
-            target = Target(unit.name, unit.first_line, unit.span, uhash)
-            observed, fired = self.judge(target, result, rules, labels)
+        for subject, uhash, result in zip(subjects, hashes, results, strict=True):
+            target = Target(subject.name, subject.line, subject.span, uhash)
+            observed, fired = self.judge(target, result, subject.rules, labels)
             observations += observed
             findings += fired
         self.record(path, language, observations, results)
-        assert len(observations) == len(units) * len(rules), "Every rule must be observed per unit"
+        assert len(observations) == sum(len(s.rules) for s in subjects), (
+            "Every rule must be observed once per function and file"
+        )
         return findings
 
     async def analyse_project(self, root: Path) -> list[tuple[Path, Finding]]:
@@ -392,6 +473,7 @@ class Analyser:
                         probability,
                         target.span,
                         target.unit_hash,
+                        result.details.get(name),
                     )
                 )
         assert len(findings) <= len(observations), "A rule fires at most once per target"
@@ -412,8 +494,9 @@ class Analyser:
         assert all(o.unit_hash for o in observations), "Observations must name their unit"
         key = str(path.resolve())
         asked = sum(r.asked for r in results)
+        measured = sum(len(r.details) for r in results)
         total = len(observations)
-        assert asked <= total, "Cannot ask more questions than were observed"
+        assert asked + measured <= total, "Cannot ask or measure more rules than were observed"
         self.store.record_results(
             key,
             language,
@@ -422,7 +505,7 @@ class Analyser:
             RunStats(
                 units=len(results),
                 asked=asked,
-                cached=total - asked,
+                cached=total - asked - measured,
                 input_tokens=sum(r.input_tokens for r in results),
                 output_tokens=sum(r.output_tokens for r in results),
             ),

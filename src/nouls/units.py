@@ -3,7 +3,8 @@
 """Split source files into function units with tree-sitter."""
 
 import re
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from functools import cache
 
 from tree_sitter import Node, Parser, Query, QueryCursor
@@ -11,6 +12,7 @@ from tree_sitter_language_pack import get_language, get_tags_query
 from tree_sitter_language_pack import get_parser as _get_parser
 
 from nouls.config import TAG_KINDS, Language, has_function_tags
+from nouls.metrics import Metric, measure_file, measure_function
 
 type NodeKey = tuple[int, int, str]
 
@@ -124,6 +126,7 @@ class Unit:
     span: Span
     first_line: int
     last_line: int
+    metrics: Mapping[Metric, int] = field(default_factory=dict[Metric, int])
 
     def contains(self, line: int) -> bool:
         """Tell whether a line falls inside the unit.
@@ -249,6 +252,7 @@ def unit_at(node: Node, data: bytes, attached: set[str]) -> Unit:
         headline(node, text),
         first.start_point.row,
         node.end_point.row,
+        measure_function(node),
     )
     assert unit.first_line <= unit.last_line, "A unit must not end before it starts"
     return unit
@@ -292,3 +296,20 @@ def extract_units(text: str, language: Language, *, tests: bool = False) -> list
     ordered = sorted(units, key=lambda unit: (unit.span.line, unit.span.column))
     assert all(unit.source for unit in ordered), "Every unit must have source"
     return ordered
+
+
+def file_metrics(text: str, language: Language) -> Mapping[Metric, int]:
+    """Measure a whole file.
+
+    Args:
+        text: The file's text.
+        language: The file's language.
+
+    Returns:
+        Every file metric, by name.
+
+    """
+    assert language.grammar, "file_metrics needs a language with a grammar"
+    measured = measure_file(get_parser(language.grammar).parse(text.encode()).root_node)
+    assert all(value >= 0 for value in measured.values()), "Metrics are never negative"
+    return measured

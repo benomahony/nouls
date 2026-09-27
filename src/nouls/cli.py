@@ -15,7 +15,15 @@ from rich.syntax import Syntax
 from rich.table import Table
 from typesafe_sdk import AsyncTypeSafeClient, TypeSafeError
 
-from nouls.analyser import PROJECT, SETTING, Analyser, Finding, project_source, unit_hash
+from nouls.analyser import (
+    PROJECT,
+    SETTING,
+    Analyser,
+    Finding,
+    file_kind,
+    project_source,
+    unit_hash,
+)
 from nouls.config import Config, Rule, Severity, find_root, load_config
 from nouls.output import fail, say
 from nouls.server import server
@@ -218,7 +226,8 @@ def rule_fields(loaded: Config, rule: Rule) -> tuple[Severity, float, str]:
     assert rule.enabled, "Only enabled rules are describable"
     scope = ", ".join(rule.languages) if rule.languages else "all languages"
     if rule.scope != "function":
-        scope = {"project": "project", "setting": "each setting"}[rule.scope]
+        where = {"file": "each file", "project": "project", "setting": "each setting"}[rule.scope]
+        scope = f"{scope}, {where}" if rule.scope == "file" else where
     if rule.files:
         scope += f" in {len(rule.files)} file patterns"
     threshold = loaded.threshold if rule.threshold is None else rule.threshold
@@ -235,13 +244,16 @@ def describe_rule(loaded: Config, name: str, rule: Rule) -> str:
         rule: The rule.
 
     Returns:
-        ``name (severity, threshold t, scope): question``.
+        ``name (severity, threshold t, scope): question``, or the metric and its limit.
 
     """
     assert name in loaded.rules, "Rule must be configured"
-    assert rule.question.strip(), "Rule question must not be blank"
     severity, threshold, scope = rule_fields(loaded, rule)
-    return f"{name} ({severity}, threshold {threshold}, {scope}): {rule.question}"
+    check = rule.describe_check()
+    assert check, "Every rule says how it decides"
+    if rule.metric is not None:
+        return f"{name} ({severity}, {scope}): {check}"
+    return f"{name} ({severity}, threshold {threshold}, {scope}): {check}"
 
 
 @app.command
@@ -277,10 +289,10 @@ def rules(config: ConfigOption = None) -> int:
     for name, rule in enabled.items():
         severity, threshold, scope = rule_fields(loaded, rule)
         style = SEVERITY_STYLE[severity]
-        question = (
-            rule.question if scope == "all languages" else f"[dim]({scope})[/dim] {rule.question}"
-        )
-        table.add_row(name, f"[{style}]{severity}[/{style}] {threshold:.0%}", question)
+        check = rule.describe_check()
+        question = check if scope == "all languages" else f"[dim]({scope})[/dim] {check}"
+        strength = "" if rule.metric is not None else f" {threshold:.0%}"
+        table.add_row(name, f"[{style}]{severity}[/{style}]{strength}", question)
     console.print(table)
     return 0
 
@@ -305,7 +317,9 @@ def label(
     if rule not in loaded.rules:
         return fail(loaded.unknown_rule(rule))
     scope = loaded.rules[rule].scope
-    assert scope in {"function", "project", "setting"}, f"Unknown rule scope {scope!r}"
+    assert scope in {"function", "file", "project", "setting"}, f"Unknown rule scope {scope!r}"
+    if scope == "file":
+        return label_file(loaded, path, rule, verdict)
     if scope == "project":
         return label_project(loaded, path, rule, verdict)
     if scope == "setting":
@@ -355,6 +369,37 @@ def label_function(loaded: Config, path: Path, line: int, rule: str, verdict: st
     assert rule in loaded.rules, "Rule must be configured"
     Store(loaded.store_path()).label(rule, unit_hash(language, unit.source), real=verdict == "real")
     say(f"Labelled {rule} on {unit.name} as {verdict}")
+    return 0
+
+
+def label_file(loaded: Config, path: Path, rule: str, verdict: str) -> int:
+    """Record a verdict on a file rule's finding.
+
+    Args:
+        loaded: The loaded configuration.
+        path: The source file.
+        rule: A rule with scope: file.
+        verdict: ``real`` or ``false``.
+
+    Returns:
+        0 when the label was saved, or the usage error code.
+
+    """
+    assert loaded.rules[rule].scope == "file", f"{rule} must be a file rule"
+    language = loaded.language_for(path)
+    if language is None:
+        return fail(loaded.unsupported(path))
+    if not path.is_file():
+        return fail(
+            f"nouls: cannot label {path} because it does not exist. "
+            "Use the path exactly as nouls check printed it."
+        )
+    text = path.read_text(encoding="utf-8")
+    Store(loaded.store_path()).label(
+        rule, unit_hash(file_kind(language), text), real=verdict == "real"
+    )
+    assert verdict in {"real", "false"}, f"verdict must be real or false but got {verdict}"
+    say(f"Labelled {rule} on {path} as {verdict}")
     return 0
 
 

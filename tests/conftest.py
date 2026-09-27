@@ -31,6 +31,7 @@ def total(items: list[int]) -> int:
     return sum(items)
 """
 PYTHON_FUNCTIONS = 2
+PYTHON_CALLS = PYTHON_FUNCTIONS + 1  # One question batch per function, and one about the file.
 # The build files' questions, the operations files' questions, and the strict pyproject's only
 # setting.
 PROJECT_CALLS = 3

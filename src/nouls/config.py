@@ -16,6 +16,7 @@ from tree_sitter_language_pack import (
     get_tags_query,
 )
 
+from nouls.metrics import FILE_METRICS, Metric, check_for
 from nouls.store import default_path
 
 CONFIG_NAMES = ("nouls.yaml", "nouls.yml", ".nouls.yaml", ".nouls.yml")
@@ -23,7 +24,7 @@ DEFAULTS = "defaults.yaml"
 CATALOGUE = "catalogue.yaml"  # One rule per entry of the engineering error catalogue.
 
 Severity = Literal["error", "warning", "info", "hint"]
-Scope = Literal["function", "project", "setting"]
+Scope = Literal["function", "file", "project", "setting"]
 type Tree = dict[str, object]
 TAG_KINDS = ("definition.function", "definition.method")
 
@@ -64,10 +65,35 @@ class MissingProjectFilesError(ValueError):
         assert "add files" in str(self), "The error must say how to fix the rule"
 
 
-class Rule(BaseModel):
-    """One yes/no question, and how to report a yes."""
+class InvalidDetectorError(ValueError):
+    """A rule does not have exactly one way to decide whether it fires."""
 
-    question: str
+    def __init__(self, problem: str) -> None:
+        """Explain what is wrong with how the rule decides and how to fix it.
+
+        Args:
+            problem: What is wrong and what to change.
+
+        """
+        super().__init__(
+            f"{problem}; a rule needs either a question, or a metric with a limit, such as "
+            "metric: parameters and limit: 7"
+        )
+        assert problem, "The error must say what is wrong"
+        assert "metric:" in str(self), "The error must show how to write a metric rule"
+
+
+class Rule(BaseModel):
+    """One yes/no question or one measurement, and how to report a finding.
+
+    A rule with a ``question`` asks TypeSafe. A rule with a ``metric`` measures the syntax tree and
+    fires when the measurement is above ``limit``. ``lines`` measures a file, so it needs
+    ``scope: file``; every other metric measures a function.
+    """
+
+    question: str | None = None
+    metric: Metric | None = None
+    limit: int | None = None
     message: str
     severity: Severity = "warning"
     threshold: float | None = None
@@ -87,15 +113,60 @@ class Rule(BaseModel):
             MissingProjectFilesError: When ``scope`` is not ``function`` and ``files`` is empty.
 
         """
-        assert self.scope in {"function", "project", "setting"}, (
+        assert self.scope in {"function", "file", "project", "setting"}, (
             f"Rule scope is {self.scope!r}; pydantic must restrict it to the Scope literal"
         )
-        if self.scope != "function" and not self.files:
+        if self.scope in {"project", "setting"} and not self.files:
             raise MissingProjectFilesError
-        assert self.scope == "function" or self.files, (
+        assert self.scope in {"function", "file"} or self.files, (
             "A project or setting rule passed validation without files; the check must raise first"
         )
         return self
+
+    @model_validator(mode="after")
+    def decides_one_way(self) -> "Rule":
+        """Reject rules without exactly one of a question or a metric, or with a bad limit.
+
+        Returns:
+            The rule, unchanged.
+
+        Raises:
+            InvalidDetectorError: When the rule cannot decide, or could decide two ways.
+
+        """
+        problem = None
+        if (self.question is None) == (self.metric is None):
+            problem = "the rule has both a question and a metric, or neither"
+        elif self.metric is None and self.limit is not None:
+            problem = "the rule has a limit but no metric to compare it with"
+        elif self.metric is not None and (self.limit is None or self.limit < 0):
+            problem = f"metric {self.metric} needs a limit of 0 or more"
+        elif self.metric is not None and self.scope != (
+            needed := "file" if self.metric in FILE_METRICS else "function"
+        ):
+            problem = f"metric {self.metric} measures a {needed}, so the rule needs scope: {needed}"
+        elif self.question is not None and not self.question.strip():
+            problem = "the rule's question is blank"
+        if problem:
+            raise InvalidDetectorError(problem)
+        assert (self.question is None) != (self.metric is None), "A rule decides exactly one way"
+        assert self.metric is None or self.limit is not None, "A metric rule has a limit"
+        return self
+
+    def describe_check(self) -> str:
+        """Say how the rule decides.
+
+        Returns:
+            The question, or the metric and its limit.
+
+        """
+        text = self.question
+        if self.metric is not None and self.limit is not None:
+            text = check_for(self.metric, self.limit)
+        assert text, "The validator guarantees a question or a metric with a limit"
+        assert text.endswith("?"), "A rule's check reads as a question"
+        assert self.question is None or text == self.question, "Questions are shown as written"
+        return text
 
 
 class Config(BaseModel):
@@ -183,15 +254,18 @@ class Config(BaseModel):
         )
         return matches(path, self.test_files)
 
-    def rules_for(self, language: str, path: Path) -> dict[str, Rule]:
-        """Select the function rules that apply to a file.
+    def rules_for(
+        self, language: str, path: Path, scope: Literal["function", "file"] = "function"
+    ) -> dict[str, Rule]:
+        """Select the function or file rules that apply to a file.
 
         Args:
             language: The file's language.
             path: The file, matched against each rule's ``files``.
+            scope: Whether to select rules about each function or about the whole file.
 
         Returns:
-            The enabled function rules for this language and file, by name.
+            The enabled rules with that scope for this language and file, by name.
 
         """
         assert language, "rules_for needs a language name; get one from language_for(path)"
@@ -199,7 +273,7 @@ class Config(BaseModel):
             name: rule
             for name, rule in self.rules.items()
             if rule.enabled
-            and rule.scope == "function"
+            and rule.scope == scope
             and (rule.languages is None or language in rule.languages)
             and (rule.files is None or matches(path, rule.files))
         }
@@ -212,13 +286,15 @@ class Config(BaseModel):
         """Select the enabled rules with one scope.
 
         Args:
-            scope: ``project`` or ``setting``; function rules come from rules_for.
+            scope: ``project`` or ``setting``; function and file rules come from rules_for.
 
         Returns:
             Every enabled rule with that scope, by name.
 
         """
-        assert scope != "function", "Select function rules with rules_for, which checks languages"
+        assert scope in {"project", "setting"}, (
+            "Select function and file rules with rules_for, which checks languages"
+        )
         selected = {
             name: rule for name, rule in self.rules.items() if rule.enabled and rule.scope == scope
         }
