@@ -26,6 +26,24 @@ DOCS = Path(__file__).parent.parent.parent / "docs"
 SCHEME = "doc://nouls/"
 
 
+class UnknownDocError(ValueError):
+    """A client asked for a documentation page that is not one nouls serves."""
+
+    def __init__(self, uri: str) -> None:
+        """Say which URI was refused and where valid ones come from.
+
+        Args:
+            uri: The URI the client asked for.
+
+        """
+        super().__init__(
+            f"{uri} is not a nouls documentation page. Use a URI from list_resources, "
+            f"which all start with {SCHEME}."
+        )
+        assert uri in str(self), "The error must name the refused URI"
+        assert "list_resources" in str(self), "The error must say where valid URIs come from"
+
+
 def doc_resources(docs: Path) -> list[Resource]:
     """Describe every Markdown page under the docs directory.
 
@@ -64,18 +82,22 @@ def read_doc(docs: Path, uri: str) -> str:
     Returns:
         The page's Markdown text.
 
+    Raises:
+        UnknownDocError: When the URI is not a doc://nouls/ URI, points outside the docs
+            directory, or names no Markdown page. The URI comes from the MCP client, so this is
+            a real check, not an assertion that disappears under ``python -O``.
+
     """
-    assert uri.startswith(SCHEME), (
-        f"{uri} is not a nouls documentation URI; use one from list_resources, "
-        f"which all start with {SCHEME}"
-    )
+    assert docs.is_absolute() or docs.exists(), "read_doc needs the docs directory"
     page = (docs / uri.removeprefix(SCHEME)).resolve()
-    assert page.is_relative_to(docs.resolve()), (
-        f"{uri} points outside the nouls docs directory; use a URI from list_resources"
-    )
-    assert page.is_file(), (
-        f"There is no nouls documentation page at {uri}; use a URI from list_resources"
-    )
+    if (
+        not uri.startswith(SCHEME)
+        or not page.is_relative_to(docs.resolve())
+        or page.suffix != ".md"
+        or not page.is_file()
+    ):
+        raise UnknownDocError(uri)
+    assert page.is_relative_to(docs.resolve()), "Only pages inside the docs directory are read"
     return page.read_text(encoding="utf-8")
 
 
@@ -108,9 +130,7 @@ async def read_resource(uri: AnyUrl) -> str:
         The page's Markdown text.
 
     """
-    assert str(uri).startswith(SCHEME), (
-        f"{uri} is not a nouls documentation URI; use one from list_resources"
-    )
+    assert DOCS.is_absolute(), f"DOCS must be absolute; got {DOCS}"
     text = await asyncio.to_thread(read_doc, DOCS, str(uri))
     assert isinstance(text, str), "read_doc must return the page's text"
     return text

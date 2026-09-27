@@ -99,13 +99,10 @@ markers = [
 
 [tool.coverage.run]
 branch = true
-omit = ["*/mcp_server.py"]
 
 [tool.coverage.report]
 exclude_lines = [
-    "pragma: no cover",
     "if __name__ == .__main__.:",
-    "if TYPE_CHECKING:",
 ]
 
 [tool.bandit]
@@ -120,11 +117,8 @@ reportImplicitStringConcatenation = false
 
 [tool.deptry]
 extend_exclude = ["tests"]
-
-[tool.deptry.per_rule_ignores]
-DEP001 = ["nouls"]
-DEP002 = ["pytest", "pytest-asyncio", "pytest-cov", "pytest-examples", "pytest-xdist", "pytest-testmon", "ruff", "basedpyright", "prek", "vulture", "bandit", "deptry", "cliqa", "bump-my-version", "zensical"]
-DEP003 = ["nouls", "mcp"]
+known_first_party = ["nouls"]
+pep621_dev_dependency_groups = ["dev"]
 
 [tool.bumpversion]
 current_version = "0.1.4"
