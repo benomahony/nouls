@@ -53,7 +53,14 @@ def test_project_rules_must_name_their_files() -> None:
 
 def test_project_and_setting_rules_are_not_asked_about_functions(config: Config) -> None:
     """Project and setting rules are not asked about functions."""
-    assert set(config.scoped_rules("project")) == {"unscheduled_static_analysis"}
+    assert set(config.scoped_rules("project")) == {
+        "unscheduled_static_analysis",
+        "cwe_1127",
+        "ext_build_004",
+        "ext_delivery_003",
+        "ext_verify_004",
+        "ext_human_004",
+    }
     assert set(config.scoped_rules("setting")) == {"relaxed_warnings"}
     scoped = {"unscheduled_static_analysis", "relaxed_warnings"}
     assert not scoped & set(config.rules_for("python", Path("app.py")))

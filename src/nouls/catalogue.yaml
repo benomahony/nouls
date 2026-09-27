@@ -1,0 +1,3185 @@
+# Rules for every entry of the engineering error catalogue 0.1.0: 475 rules,
+# one per entry. 443 come from the CWE-699 and CWE-1305 views of MITRE's Common Weakness
+# Enumeration and 32 are the catalogue's own engineering extensions (EXT-*),
+# which are not CWE entries. Rule names are catalogue IDs in lower case, such as cwe_22 for CWE-22.
+# Questions paraphrase the CWE descriptions retrieved 2026-09-26 from
+# https://cwe.mitre.org/data/csv/699.csv.zip and https://cwe.mitre.org/data/csv/1305.csv.zip.
+# CWE is sponsored by the U.S. Department of Homeland Security and operated by MITRE; see
+# https://cwe.mitre.org/about/termsofuse.html. No endorsement is implied.
+#
+# nouls loads this file after defaults.yaml and before your nouls config, so any rule here can be
+# reworded, retuned or turned off like a default one, for example rules: {cwe_1080: {enabled: false}}.
+
+rules:
+  # CWE-15 External Control of System or Configuration Setting
+  cwe_15:
+    question: Does the function let a caller or user input choose a system or configuration setting, such as an environment variable, config key, database connection option or process setting, without restricting which settings or values are allowed?
+    message: Input decides a system or configuration setting. Allow only a fixed set of settings and values, and reject everything else
+    severity: warning
+
+  # CWE-22 Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')
+  cwe_22:
+    question: Does the function build a file or directory path from caller or user input and use it without checking that the resolved path stays inside the intended base directory, so sequences such as .. or an absolute path could escape it?
+    message: A path built from input can escape its directory with .. or an absolute path. Resolve the path and check it is still inside the allowed directory before using it
+    severity: error
+
+  # CWE-41 Improper Resolution of Path Equivalence
+  cwe_41:
+    question: Does the function decide access to a file by comparing its name or path as given, without canonicalising it first, so an equivalent name such as a trailing dot, doubled slash, different case or short name could reach the same file and bypass the check?
+    message: Access is decided on the path as written, so an equivalent spelling of the same path gets past the check. Canonicalise the path first, then compare it
+    severity: warning
+
+  # CWE-59 Improper Link Resolution Before File Access ('Link Following')
+  cwe_59:
+    question: Does the function open, write, delete or change permissions on a file by name in a location others can write to, without guarding against the name being a symbolic link, hard link or shortcut to another file?
+    message: The file could be a link to somewhere else, so this can act on the wrong file. Open it without following links, or check it is a regular file through the opened handle
+    severity: warning
+
+  # CWE-66 Improper Handling of File Names that Identify Virtual Resources
+  cwe_66:
+    question: Does the function operate on a file name from input without rejecting names that refer to devices or virtual resources, such as CON, NUL, /dev/ paths, named pipes or alternate data streams?
+    message: A file name from input could name a device or virtual resource instead of a file. Reject device names, pipes and stream suffixes before using the name
+    severity: warning
+
+  # CWE-73 External Control of File Name or Path
+  cwe_73:
+    question: Does the function let caller or user input choose the name or path of a file it reads, writes, deletes or executes, without mapping it to an allowed set of files?
+    message: Input chooses which file is used. Map the input to a fixed set of allowed files, or generate the name yourself
+    severity: error
+
+  # CWE-76 Improper Neutralization of Equivalent Special Elements
+  cwe_76:
+    question: Does the function neutralise some dangerous characters or sequences in input but miss equivalent forms of them, such as alternate encodings, Unicode look-alikes, different case or other spellings with the same meaning?
+    message: Dangerous input is filtered in one form but equivalent forms get through. Decode and normalise the input first, or allow only known-good characters
+    severity: warning
+
+  # CWE-78 Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')
+  cwe_78:
+    question: Does the function build an operating system command or shell string from caller or user input, or run it through a shell, without escaping it or passing it as separate arguments to an API that bypasses the shell?
+    message: Input reaches a shell command and can run other commands. Pass arguments as a list to an API that does not use the shell, and never interpolate input into a command string
+    severity: error
+
+  # CWE-79 Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')
+  cwe_79:
+    question: Does the function put caller or user input into HTML, JavaScript, a URL or other web page output without escaping or encoding it for that context?
+    message: Input is written into a web page without escaping, allowing cross-site scripting. Escape it for the context it lands in, or use a template engine that escapes automatically
+    severity: error
+
+  # CWE-88 Improper Neutralization of Argument Delimiters in a Command ('Argument Injection')
+  cwe_88:
+    question: Does the function pass caller or user input as arguments to a command or program without separating it from options, so a value starting with - or containing spaces or delimiters could add unintended options or arguments?
+    message: Input can become extra options or arguments to a command. Pass each argument separately, put -- before user values, and reject values starting with -
+    severity: error
+
+  # CWE-89 Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')
+  cwe_89:
+    question: Does the function build a SQL statement by concatenating, formatting or interpolating caller or user input into the query text instead of using bound parameters?
+    message: Input is written into SQL text, allowing SQL injection. Use bound query parameters for every value
+    severity: error
+
+  # CWE-90 Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')
+  cwe_90:
+    question: Does the function build an LDAP filter or distinguished name from caller or user input without escaping LDAP special characters?
+    message: Input is written into an LDAP query without escaping. Escape LDAP special characters, or use an API that binds values safely
+    severity: error
+
+  # CWE-91 XML Injection (aka Blind XPath Injection)
+  cwe_91:
+    question: Does the function build XML or an XPath expression by inserting caller or user input as raw text, without escaping it or using an API that sets values safely?
+    message: Input is inserted into XML or XPath as raw text and can change its structure. Use an XML API to set values, or escape them, and bind XPath variables
+    severity: error
+
+  # CWE-93 Improper Neutralization of CRLF Sequences ('CRLF Injection')
+  cwe_93:
+    question: Does the function write caller or user input into headers, log lines, emails or other line-based output without removing or rejecting carriage return and line feed characters?
+    message: Input with line breaks can inject new headers or lines. Reject or strip carriage returns and line feeds from the input
+    severity: warning
+
+  # CWE-94 Improper Control of Generation of Code ('Code Injection')
+  cwe_94:
+    question: Does the function evaluate, compile or execute code, such as with eval, exec, Function or a template engine, that is built from caller or user input?
+    message: Code built from input is executed, so input can run arbitrary code. Do not evaluate input; parse it as data or dispatch to a fixed set of operations
+    severity: error
+
+  # CWE-112 Missing XML Validation
+  cwe_112:
+    question: Does the function parse XML from an untrusted source and use it without validating it against the expected schema or structure?
+    message: Untrusted XML is used without checking it matches the expected schema. Validate it against the schema before reading values from it
+    severity: warning
+
+  # CWE-115 Misinterpretation of Input
+  cwe_115:
+    question: Does the function interpret input in a security-relevant way that could differ from what its sender intended, such as guessing a type, encoding or format, or trusting a field whose meaning is ambiguous?
+    message: Input could be read differently from what was meant, in a way that affects security. Parse it strictly in one declared format and reject anything ambiguous
+    severity: warning
+
+  # CWE-117 Improper Output Neutralization for Logs
+  cwe_117:
+    question: Does the function write caller or user input into a log message without neutralising line breaks or control characters, so an attacker could forge or corrupt log entries?
+    message: Input written to logs can forge extra log entries. Log it as a structured field, or strip line breaks and control characters first
+    severity: warning
+
+  # CWE-120 Buffer Copy without Checking Size of Input ('Classic Buffer Overflow')
+  cwe_120:
+    question: Does the function copy data into a fixed-size buffer, for example with strcpy, strcat, memcpy, sprintf or a loop, without checking that the source fits in the destination?
+    message: Data is copied into a buffer without checking it fits, which can overflow it. Check the length first, or use a bounded copy with the destination size
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-124 Buffer Underwrite ('Buffer Underflow')
+  cwe_124:
+    question: Does the function write to a buffer through an index or pointer that can go below the start of the buffer, for example with a negative index or pointer decrement past the first element?
+    message: A write can land before the start of the buffer. Check the index is not negative and the pointer stays at or after the buffer start
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-125 Out-of-bounds Read
+  cwe_125:
+    question: Does the function read from an array, buffer or pointer with an index or length that is not checked against the buffer's bounds, so it could read past the end or before the start?
+    message: A read can go outside the buffer. Check every index and length against the buffer's size before reading
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-128 Wrap-around Error
+  cwe_128:
+    question: Does the function increment or add to an integer that could pass its type's maximum and wrap around, while later logic assumes the value only grows?
+    message: This value can wrap around past its maximum while the code assumes it only grows. Check for overflow before the arithmetic, or use a wider type
+    severity: warning
+    languages:
+      - c
+      - cpp
+
+  # CWE-130 Improper Handling of Length Parameter Inconsistency
+  cwe_130:
+    question: Does the function trust a length or size field read from a message or structure without checking it against the actual amount of data received?
+    message: A length field from input is trusted without checking the real data size. Check the declared length against the bytes actually available before using it
+    severity: error
+
+  # CWE-131 Incorrect Calculation of Buffer Size
+  cwe_131:
+    question: Does the function calculate the size of a buffer to allocate in a way that can be too small, for example forgetting the terminator, multiplying without an overflow check, or using the size of a pointer instead of the data?
+    message: The buffer size calculation can come out too small. Include the terminator and element size, and check the multiplication for overflow
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-134 Use of Externally-Controlled Format String
+  cwe_134:
+    question: Does the function pass a format string that comes from caller or user input to printf, a logger or another formatting function?
+    message: A format string comes from input, so input can read or write memory or break output. Use a fixed format string and pass input as an argument
+    severity: error
+
+  # CWE-135 Incorrect Calculation of Multi-Byte String Length
+  cwe_135:
+    question: Does the function compute the length of a string that can contain wide or multi-byte characters by counting bytes where characters are needed, or characters where bytes are needed?
+    message: String length is counted in the wrong unit for multi-byte text. Use byte counts for buffers and character counts for text, and convert explicitly
+    severity: warning
+    languages:
+      - c
+      - cpp
+
+  # CWE-140 Improper Neutralization of Delimiters
+  cwe_140:
+    question: Does the function join or split data using delimiters such as commas, colons, newlines or pipes, without escaping or rejecting those delimiters when they appear inside the input values?
+    message: A delimiter inside a value can split or merge fields. Escape delimiters in values, or use a format such as JSON or CSV with proper quoting
+    severity: warning
+
+  # CWE-166 Improper Handling of Missing Special Element
+  cwe_166:
+    question: Does the function parse input that must contain a particular delimiter, terminator, quote or marker without handling the case where that element is missing?
+    message: Input missing an expected delimiter or terminator is not handled. Check the element is present and reject the input when it is not
+    severity: warning
+
+  # CWE-167 Improper Handling of Additional Special Element
+  cwe_167:
+    question: Does the function parse input without handling extra, repeated or unexpected delimiters, quotes, separators or other special elements?
+    message: Extra special characters in input are not handled. Reject input with unexpected or repeated special elements, or parse with a strict grammar
+    severity: warning
+
+  # CWE-168 Improper Handling of Inconsistent Special Elements
+  cwe_168:
+    question: Does the function parse input with paired or nested special characters, such as brackets or quotes, without handling pairs that are unbalanced, out of order or improperly nested?
+    message: Unbalanced or badly nested pairs in input are not handled. Check pairs match and nest correctly, and reject input when they do not
+    severity: warning
+
+  # CWE-170 Improper Null Termination
+  cwe_170:
+    question: Does the function build or copy a string or array that must be null terminated, for example with strncpy or read, without ensuring the terminator is written?
+    message: The string may not be null terminated, so later reads can run past its end. Write the terminator explicitly after bounded copies and reads
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-178 Improper Handling of Case Sensitivity
+  cwe_178:
+    question: Does the function compare names, paths, identifiers, credentials or extensions in a way where case sensitivity differs from the system that uses them, so a different case could bypass a check or reach another resource?
+    message: Case is handled differently here than where the value is used, so a different case can bypass the check. Normalise case consistently, or compare the way the target system does
+    severity: warning
+
+  # CWE-179 Incorrect Behavior Order: Early Validation
+  cwe_179:
+    question: Does the function validate input before decoding, normalising, unescaping or otherwise transforming it, so the transformation could produce a value the validation would have rejected?
+    message: Input is validated before it is transformed, so the transformed value is not checked. Decode and normalise first, then validate
+    severity: warning
+
+  # CWE-182 Collapse of Data into Unsafe Value
+  cwe_182:
+    question: Does the function remove dangerous sequences from input in a single pass, so what remains can collapse into a dangerous value, for example ....// becoming ../ after removing ../?
+    message: Removing dangerous text once can leave dangerous text behind. Reject input containing it instead of stripping, or repeat until nothing changes
+    severity: warning
+
+  # CWE-183 Permissive List of Allowed Inputs
+  cwe_183:
+    question: Does the function allow inputs through an allow list or pattern that is broader than intended, so it admits values that are unsafe?
+    message: The allow list admits values that are not safe. Narrow the list or pattern to exactly the values that are safe
+    severity: warning
+
+  # CWE-184 Incomplete List of Disallowed Inputs
+  cwe_184:
+    question: Does the function protect against dangerous input using a list of disallowed values, characters or patterns that is incomplete?
+    message: The deny list misses dangerous values. Use an allow list of known-good values instead of a deny list
+    severity: warning
+
+  # CWE-186 Overly Restrictive Regular Expression
+  cwe_186:
+    question: Does the function use a regular expression to detect dangerous or invalid values that fails to match some of the values it is meant to catch, for example missing anchors, case or alternate forms?
+    message: The regular expression misses some of the values it should catch. Anchor it and test it against every form the dangerous value can take
+    severity: warning
+
+  # CWE-190 Integer Overflow or Wraparound
+  cwe_190:
+    question: Does the function perform integer arithmetic, such as addition, multiplication or a size calculation, that could overflow or wrap around, where the result is then used for allocation, indexing, a loop bound or a security decision?
+    message: This integer arithmetic can overflow and produce a small or negative value. Check the operands against the type's limits before the arithmetic, or use checked arithmetic
+    severity: error
+
+  # CWE-191 Integer Underflow (Wrap or Wraparound)
+  cwe_191:
+    question: Does the function subtract integers in a way that could go below the type's minimum and wrap around, particularly with unsigned values used as sizes or indexes?
+    message: This subtraction can wrap around below zero. Check the operands first so the result stays in range
+    severity: error
+
+  # CWE-193 Off-by-one Error
+  cwe_193:
+    question: Does the function use a maximum, minimum, length or loop bound that is off by one, such as <= where < is needed, or a buffer one element too small?
+    message: A bound here is off by one. Check the first and last values, and whether each comparison should be inclusive or exclusive
+    severity: error
+
+  # CWE-201 Insertion of Sensitive Information Into Sent Data
+  cwe_201:
+    question: Does the function send, return or serialise data to a caller, client or other system that includes sensitive fields, such as passwords, tokens, secrets or personal data, that the recipient should not see?
+    message: Sensitive fields are included in data sent to someone who should not see them. Send only the fields the recipient needs
+    severity: warning
+
+  # CWE-204 Observable Response Discrepancy
+  cwe_204:
+    question: Does the function return different responses, status codes or messages depending on security-relevant state in a way that tells an unauthorised caller something, such as whether a username exists?
+    message: Different responses reveal internal state, such as whether an account exists. Return the same response for every failure case
+    severity: warning
+
+  # CWE-205 Observable Behavioral Discrepancy
+  cwe_205:
+    question: Does the function behave observably differently depending on secret or internal state, for example in which calls it makes, what it returns or how it fails, in a way that reveals that state to an unauthorised caller?
+    message: Observable behaviour reveals internal or secret state. Make the behaviour the same whichever way the secret decision goes
+    severity: info
+
+  # CWE-208 Observable Timing Discrepancy
+  cwe_208:
+    question: Does the function compare secrets, such as passwords, tokens, MACs or API keys, with an ordinary equality check or early return that takes longer the more characters match?
+    message: Comparing secrets this way leaks how much of them matched through timing. Use a constant-time comparison
+    severity: warning
+
+  # CWE-209 Generation of Error Message Containing Sensitive Information
+  cwe_209:
+    question: Does the function put sensitive details, such as stack traces, queries, file paths, configuration, credentials or personal data, into an error message that is shown or returned to a user or client?
+    message: An error message exposes sensitive details. Return a generic message to the user and log the details privately
+    severity: warning
+
+  # CWE-212 Improper Removal of Sensitive Information Before Storage or Transfer
+  cwe_212:
+    question: Does the function store, export, share or send a resource, such as a document, record, message or file, without removing sensitive information it contains first?
+    message: Sensitive information is left in data that is stored or shared. Remove or redact it before the data leaves
+    severity: warning
+
+  # CWE-213 Exposure of Sensitive Information Due to Incompatible Policies
+  cwe_213:
+    question: Does the function expose information that the code intends to share but that users, administrators or data subjects would consider sensitive, such as personal details, location or internal identifiers?
+    message: This shares information that others would consider sensitive. Check it against the privacy policy and share only what is needed
+    severity: info
+
+  # CWE-214 Invocation of Process Using Visible Sensitive Information
+  cwe_214:
+    question: Does the function start a process with a password, token, key or other secret in its command-line arguments or environment, where other processes could see it?
+    message: A secret is passed on the command line or in the environment, where other processes can read it. Pass it through standard input, a file with restricted permissions or a secret store
+    severity: warning
+
+  # CWE-215 Insertion of Sensitive Information Into Debugging Code
+  cwe_215:
+    question: Does the function print, log or return sensitive information, such as secrets or personal data, in debugging code that could run in production?
+    message: Debugging code exposes sensitive information. Remove it, or make sure it cannot run in production and does not include secrets
+    severity: warning
+
+  # CWE-222 Truncation of Security-relevant Information
+  cwe_222:
+    question: Does the function truncate security-relevant information, such as usernames, source addresses, request details or error causes, when logging or displaying it, so the source or nature of an attack could be hidden?
+    message: Security-relevant information is truncated, which can hide an attack. Record it in full, or record that it was truncated
+    severity: info
+
+  # CWE-223 Omission of Security-relevant Information
+  cwe_223:
+    question: Does the function perform or reject a security-relevant action, such as a login, permission change or access denial, without recording who did it, what was affected and the outcome?
+    message: A security-relevant action is not recorded with who, what and the outcome. Log the actor, the target and the result
+    severity: info
+
+  # CWE-224 Obscured Security-relevant Information by Alternate Name
+  cwe_224:
+    question: Does the function record security-relevant events using an alias, display name or non-canonical identifier for the entity instead of its canonical identity?
+    message: Security events are recorded under an alias rather than the real identity. Log the canonical identifier of the entity
+    severity: info
+
+  # CWE-229 Improper Handling of Values
+  cwe_229:
+    question: Does the function read values from input without handling the case where a value is missing, empty, undefined or present more times than expected?
+    message: Missing, empty or repeated values in input are not handled. Check each value's presence and count, and reject the input when it is wrong
+    severity: warning
+
+  # CWE-233 Improper Handling of Parameters
+  cwe_233:
+    question: Does the function read parameters, fields or arguments from input without handling the case where some are missing, extra or undefined?
+    message: Missing or extra parameters in input are not handled. Validate the set of parameters and reject input that does not match
+    severity: warning
+
+  # CWE-237 Improper Handling of Structural Elements
+  cwe_237:
+    question: Does the function process structured input, such as nested objects, arrays or records, without handling malformed, missing or unexpected structural elements?
+    message: Malformed structure in input is not handled. Validate the structure against a schema before using it
+    severity: warning
+
+  # CWE-241 Improper Handling of Unexpected Data Type
+  cwe_241:
+    question: Does the function use an input value as a particular type, such as a number, date or list, without checking that it actually is that type and handling it when it is not?
+    message: An input value is used without checking its type. Parse it into the expected type and reject it when parsing fails
+    severity: warning
+
+  # CWE-242 Use of Inherently Dangerous Function
+  cwe_242:
+    question: Does the function call an inherently unsafe function that cannot be used safely, such as gets, or an equivalent unbounded read?
+    message: This calls a function that can never be used safely. Replace it with a bounded alternative such as fgets
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-243 Creation of chroot Jail Without Changing Working Directory
+  cwe_243:
+    question: Does the function call chroot without calling chdir to the new root immediately afterwards?
+    message: chroot is called without changing directory, so the old working directory still escapes the jail. Call chdir("/") right after chroot
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-248 Uncaught Exception
+  cwe_248:
+    question: Does the function call code that can throw an exception it neither catches nor declares, in a place such as a thread entry point, callback, handler or main loop where an uncaught exception would crash the program or leak details?
+    message: An exception can escape here and crash the program or expose details. Catch it at this boundary and handle or report it
+    severity: warning
+
+  # CWE-250 Execution with Unnecessary Privileges
+  cwe_250:
+    question: Does the function run with or request more privilege than the operation needs, such as running as root or administrator, using an admin database account or requesting broad permissions?
+    message: This runs with more privilege than it needs. Use the least privileged account or permission that does the job
+    severity: warning
+
+  # CWE-252 Unchecked Return Value
+  cwe_252:
+    question: Does the function ignore the return value or error of a call that can fail, such as a write, close, allocation, lock or system call, so a failure goes unnoticed?
+    message: A call that can fail has its result ignored. Check the return value or error and handle the failure
+    severity: warning
+
+  # CWE-253 Incorrect Check of Function Return Value
+  cwe_253:
+    question: Does the function check the return value of a call incorrectly, for example testing for the wrong error value, treating 0 as failure when it means success, or checking only some failure cases?
+    message: The return value is checked the wrong way, so failures can be missed. Check it against the values the called function documents for failure
+    severity: warning
+
+  # CWE-256 Plaintext Storage of a Password
+  cwe_256:
+    question: Does the function store a password in plain text, for example in a database, file, cookie or long-lived variable, instead of storing a salted hash?
+    message: A password is stored in plain text. Store a salted hash from a password hashing function instead
+    severity: error
+
+  # CWE-257 Storing Passwords in a Recoverable Format
+  cwe_257:
+    question: Does the function store passwords in a format that can be turned back into the password, such as reversible encryption or encoding, instead of a one-way hash?
+    message: Passwords are stored in a recoverable form. Store a salted one-way hash from a password hashing function instead
+    severity: error
+
+  # CWE-260 Password in Configuration File
+  cwe_260:
+    question: Does the function read a password or secret from, or write one to, a configuration file in plain text?
+    message: A password is kept in plain text in a configuration file. Load it from a secret store or environment injected at runtime
+    severity: error
+
+  # CWE-261 Weak Encoding for Password
+  cwe_261:
+    question: Does the function obscure a password with a trivial encoding such as Base64, hex, XOR or ROT13, as if that protected it?
+    message: A password is only encoded, which anyone can reverse. Hash it for storage, or encrypt it with a managed key if it must be recovered
+    severity: error
+
+  # CWE-262 Not Using Password Aging
+  cwe_262:
+    question: Does the function manage user passwords without any mechanism to record their age or require them to be changed after compromise or a policy period?
+    message: Passwords have no age or rotation mechanism. Record when each password was set and force a change when policy or a compromise requires it
+    severity: info
+
+  # CWE-263 Password Aging with Long Expiration
+  cwe_263:
+    question: Does the function set a password expiry period that is excessively long for the system's policy?
+    message: The password expiry period is very long. Shorten it to match the security policy
+    severity: info
+
+  # CWE-266 Incorrect Privilege Assignment
+  cwe_266:
+    question: Does the function assign a role, permission or privilege to a user or actor who should not have it, for example granting admin by default or from an unverified request field?
+    message: A privilege is granted to someone who should not have it. Grant only the privileges the actor is verified to need
+    severity: error
+
+  # CWE-267 Privilege Defined With Unsafe Actions
+  cwe_267:
+    question: Does the function let a role or privilege perform actions beyond its intended purpose, such as a read-only role that can also modify data?
+    message: A privilege allows more than it is meant to. Restrict what the privilege permits to its intended actions
+    severity: warning
+
+  # CWE-268 Privilege Chaining
+  cwe_268:
+    question: Does the function allow two separate privileges or roles to be combined so that together they permit an action neither should allow alone?
+    message: Combining privileges here allows an action neither should permit alone. Check the combined effect of privileges, not each one separately
+    severity: warning
+
+  # CWE-270 Privilege Context Switching Error
+  cwe_270:
+    question: Does the function switch between privilege levels or security contexts, such as impersonating a user or elevating temporarily, without correctly restoring the original context on every path including errors?
+    message: Privileges may not be restored after switching context, especially on an error. Restore the original context in a finally block or equivalent
+    severity: error
+
+  # CWE-272 Least Privilege Violation
+  cwe_272:
+    question: Does the function acquire elevated privileges for an operation and keep them longer than necessary instead of dropping them immediately afterwards?
+    message: Elevated privileges are kept after they are needed. Drop them immediately after the privileged operation
+    severity: error
+
+  # CWE-273 Improper Check for Dropped Privileges
+  cwe_273:
+    question: Does the function attempt to drop privileges, for example with setuid or setgid, without checking that the drop succeeded?
+    message: Dropping privileges is not checked, so the code may keep running privileged. Check the result and stop if the drop failed
+    severity: error
+
+  # CWE-274 Improper Handling of Insufficient Privileges
+  cwe_274:
+    question: Does the function perform an operation that needs privileges without handling the case where it does not have them, so it continues in an unexpected state?
+    message: Missing privileges are not handled, so the code may continue in a bad state. Check for the permission error and fail safely
+    severity: warning
+
+  # CWE-276 Incorrect Default Permissions
+  cwe_276:
+    question: Does the function create or install files or directories with permissions that let any user modify them, such as mode 0777 or 0666?
+    message: Files are created writable by everyone. Create them with the narrowest permissions needed, such as 0600 or 0644
+    severity: error
+
+  # CWE-277 Insecure Inherited Permissions
+  cwe_277:
+    question: Does the function set a permissive default, such as umask 0 or a broad access list, that objects it creates later will inherit?
+    message: Objects created later will inherit insecure permissions. Set a restrictive umask or default access list
+    severity: warning
+
+  # CWE-278 Insecure Preserved Inherited Permissions
+  cwe_278:
+    question: Does the function copy, extract or restore files while preserving their original permissions or ownership, without checking those permissions are safe?
+    message: Insecure permissions are carried over from the source. Set safe permissions explicitly on files you copy or extract
+    severity: warning
+
+  # CWE-279 Incorrect Execution-Assigned Permissions
+  cwe_279:
+    question: Does the function set permissions on a file or object at runtime that differ from the permissions the user or configuration specified?
+    message: Permissions set here differ from what was asked for. Apply exactly the permissions the user or configuration specified
+    severity: warning
+
+  # CWE-280 Improper Handling of Insufficient Permissions or Privileges
+  cwe_280:
+    question: Does the function access a resource without handling a permission denied failure, so the code continues along an unexpected path or leaves state invalid?
+    message: A permission failure is not handled and can leave state invalid. Catch the permission error and fail cleanly
+    severity: warning
+
+  # CWE-281 Improper Preservation of Permissions
+  cwe_281:
+    question: Does the function copy, restore, move or share files or objects in a way that loses their original permissions, leaving them less restricted than the source?
+    message: The copy ends up with looser permissions than the original. Preserve the source permissions, or set restrictive ones explicitly
+    severity: warning
+
+  # CWE-283 Unverified Ownership
+  cwe_283:
+    question: Does the function trust or use a critical resource, such as a configuration file, key file, socket or directory, without checking that it is owned by the expected user or process?
+    message: A critical resource is used without checking who owns it. Verify its owner before trusting its contents
+    severity: warning
+
+  # CWE-289 Authentication Bypass by Alternate Name
+  cwe_289:
+    question: Does the function authenticate or authorise based on the name of a user or resource without handling every name that refers to the same entity, such as case variants, aliases, encoded forms or trailing characters?
+    message: An alternate name for the same user or resource can bypass this check. Canonicalise the name before authenticating or authorising
+    severity: error
+
+  # CWE-290 Authentication Bypass by Spoofing
+  cwe_290:
+    question: Does the function authenticate a caller using information the caller can forge, such as an IP address, hostname, Referer, a client-supplied header or user ID field?
+    message: Authentication relies on something the caller can fake. Authenticate with a credential or signature the caller cannot forge
+    severity: error
+
+  # CWE-294 Authentication Bypass by Capture-replay
+  cwe_294:
+    question: Does the function accept an authentication message or token without a nonce, timestamp or one-time value, so a captured copy could be replayed to authenticate again?
+    message: A captured authentication message can be replayed. Include a nonce or timestamp and reject any message seen before or too old
+    severity: error
+
+  # CWE-295 Improper Certificate Validation
+  cwe_295:
+    question: Does the function disable, skip or weaken TLS certificate validation, for example verify=False, accepting any certificate, ignoring hostname mismatch or trusting self-signed certificates?
+    message: Certificate validation is off or weakened, so connections can be intercepted. Validate the full chain and hostname
+    severity: error
+
+  # CWE-301 Reflection Attack in an Authentication Protocol
+  cwe_301:
+    question: Does the function implement a challenge-response authentication where the same key or procedure is used in both directions, so an attacker could reflect a challenge back to get it answered?
+    message: The challenge-response can be answered by reflecting the challenge back. Use different keys or include the sender's identity in each direction
+    severity: error
+
+  # CWE-303 Incorrect Implementation of Authentication Algorithm
+  cwe_303:
+    question: Does the function implement a standard authentication algorithm, such as HMAC verification, JWT validation or password checking, incorrectly, for example skipping a step, comparing the wrong values or accepting a none algorithm?
+    message: An authentication algorithm is implemented incorrectly and may be bypassed. Use a vetted library, or follow the specification step by step
+    severity: error
+
+  # CWE-305 Authentication Bypass by Primary Weakness
+  cwe_305:
+    question: Does the function contain a path that skips authentication because of another flaw, such as an exception handler, default case or early return that lets the caller through?
+    message: A separate flaw lets callers skip authentication. Make every path fail closed unless authentication succeeded
+    severity: error
+
+  # CWE-306 Missing Authentication for Critical Function
+  cwe_306:
+    question: Does the function perform a critical or expensive action, such as changing accounts, configuration, money or data, or starting heavy work, without first authenticating the caller?
+    message: A critical action runs without authenticating the caller. Require authentication before this action
+    severity: error
+
+  # CWE-307 Improper Restriction of Excessive Authentication Attempts
+  cwe_307:
+    question: Does the function check login credentials, codes or tokens without limiting, delaying or locking out repeated failed attempts?
+    message: Failed attempts are not limited, allowing brute force. Add rate limiting, backoff or lockout after repeated failures
+    severity: warning
+
+  # CWE-308 Use of Single-factor Authentication
+  cwe_308:
+    question: Does the function grant access to a high-risk operation or account with only a password or a single factor, where a second factor would be expected?
+    message: A high-risk operation relies on a single factor. Require a second factor for it
+    severity: warning
+
+  # CWE-309 Use of Password System for Primary Authentication
+  cwe_309:
+    question: Does the function use a password as the only primary means of authenticating to a sensitive system, where stronger methods such as keys, certificates or single sign-on are available?
+    message: Authentication relies on passwords alone. Consider keys, certificates, single sign-on or a second factor
+    severity: info
+
+  # CWE-312 Cleartext Storage of Sensitive Information
+  cwe_312:
+    question: Does the function write sensitive information, such as passwords, tokens, keys, card numbers or personal data, in cleartext to a file, database, cookie, cache or log?
+    message: Sensitive data is stored in cleartext. Encrypt it, hash it, or do not store it
+    severity: error
+
+  # CWE-319 Cleartext Transmission of Sensitive Information
+  cwe_319:
+    question: Does the function send sensitive information, such as credentials, tokens or personal data, over an unencrypted channel such as http://, plain FTP, SMTP without TLS or a raw socket?
+    message: Sensitive data is sent unencrypted. Use TLS or another encrypted channel
+    severity: error
+
+  # CWE-322 Key Exchange without Entity Authentication
+  cwe_322:
+    question: Does the function perform a key exchange, such as Diffie-Hellman, without authenticating the other party, leaving it open to a man in the middle?
+    message: The key exchange does not check who is on the other end. Authenticate the peer, for example with a certificate or signature
+    severity: error
+
+  # CWE-323 Reusing a Nonce, Key Pair in Encryption
+  cwe_323:
+    question: Does the function reuse a nonce, IV or key pair across encryptions where it must be unique, for example a fixed or counter-reset IV with the same key?
+    message: A nonce or IV is reused with the same key, which breaks the encryption. Generate a fresh random or unique nonce for every encryption
+    severity: error
+
+  # CWE-324 Use of a Key Past its Expiration Date
+  cwe_324:
+    question: Does the function use a cryptographic key, certificate or password without checking whether it has expired?
+    message: A key or credential is used without checking its expiry. Check the expiry date and reject expired keys
+    severity: warning
+
+  # CWE-325 Missing Cryptographic Step
+  cwe_325:
+    question: Does the function skip a required step of a cryptographic algorithm, such as verifying a tag, checking padding, using a salt or deriving the key properly?
+    message: A required cryptographic step is missing, so the protection is weaker than it looks. Use a vetted library's high-level API that performs every step
+    severity: error
+
+  # CWE-328 Use of Weak Hash
+  cwe_328:
+    question: Does the function use a weak hash such as MD5, SHA-1 or a non-cryptographic hash for a security purpose, such as passwords, signatures, integrity checks or tokens?
+    message: A weak hash is used for security. Use SHA-256 or stronger, or a password hashing function for passwords
+    severity: error
+
+  # CWE-331 Insufficient Entropy
+  cwe_331:
+    question: Does the function generate a security value, such as a token, key, salt or session ID, from a source with too little entropy, such as a timestamp, counter, PID or short value?
+    message: A security value has too little entropy and can be guessed. Generate it from a cryptographically secure random source with enough bits
+    severity: error
+
+  # CWE-334 Small Space of Random Values
+  cwe_334:
+    question: Does the function generate a security-relevant random value from a space small enough to brute force, such as a short PIN, a few random bytes or a small integer range?
+    message: The random value has too few possibilities and can be guessed. Use at least 128 bits from a secure random source
+    severity: error
+
+  # CWE-335 Incorrect Usage of Seeds in Pseudo-Random Number Generator (PRNG)
+  cwe_335:
+    question: Does the function seed a random number generator with a fixed, predictable or reused seed, such as a constant or the current time, where the output must be unpredictable?
+    message: The random generator's seed is predictable, so its output is too. Use a cryptographically secure generator that seeds itself
+    severity: error
+
+  # CWE-338 Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)
+  cwe_338:
+    question: Does the function use a non-cryptographic random generator, such as random, Math.random or rand, to create tokens, passwords, keys, salts, nonces or other security values?
+    message: A non-cryptographic random generator makes a security value. Use a cryptographically secure generator such as secrets or crypto.randomBytes
+    severity: error
+
+  # CWE-341 Predictable from Observable State
+  cwe_341:
+    question: Does the function derive a security-relevant value from observable state, such as the time, process ID, hostname or a sequence number?
+    message: A security value is derived from state an attacker can observe. Generate it from a cryptographically secure random source
+    severity: error
+
+  # CWE-342 Predictable Exact Value from Previous Values
+  cwe_342:
+    question: Does the function produce security-relevant identifiers or tokens that follow from previous values, such as incrementing IDs or sequential tokens?
+    message: The next value can be predicted from previous ones. Use random identifiers from a secure source
+    severity: error
+
+  # CWE-343 Predictable Value Range from Previous Values
+  cwe_343:
+    question: Does the function generate security-relevant values whose next value falls in a narrow range predictable from earlier values?
+    message: The next value's range can be predicted from earlier ones. Use a cryptographically secure random source
+    severity: warning
+
+  # CWE-344 Use of Invariant Value in Dynamically Changing Context
+  cwe_344:
+    question: Does the function hard code a value, name, path or reference that should vary across environments, installations or users, such as a fixed key, salt, host or file location?
+    message: A value that should vary by environment is hard coded. Load it from configuration or generate it per installation
+    severity: warning
+
+  # CWE-346 Origin Validation Error
+  cwe_346:
+    question: Does the function accept data, messages or requests without verifying where they came from, for example not checking the Origin, message sender, event source or webhook signature?
+    message: The source of data is not verified. Check the origin, sender or signature before trusting it
+    severity: error
+
+  # CWE-347 Improper Verification of Cryptographic Signature
+  cwe_347:
+    question: Does the function use signed data, such as a token, package, message or update, without verifying the signature, or verify it incorrectly, for example accepting unsigned data or not checking the key?
+    message: Signed data is used without a correct signature check. Verify the signature with the expected key and algorithm before using the data
+    severity: error
+
+  # CWE-348 Use of Less Trusted Source
+  cwe_348:
+    question: Does the function take a security-relevant value from a less trusted source, such as a client header like X-Forwarded-For, when a more trusted source like the connection itself is available?
+    message: A value is read from a less trusted source when a more trusted one exists. Use the trusted source, such as the actual connection address
+    severity: warning
+
+  # CWE-349 Acceptance of Extraneous Untrusted Data With Trusted Data
+  cwe_349:
+    question: Does the function accept extra fields or data submitted alongside trusted data and treat them as trusted, for example mass-assigning request fields onto a model?
+    message: Untrusted extra data is accepted along with trusted data. Accept only an explicit list of fields and ignore the rest
+    severity: error
+
+  # CWE-351 Insufficient Type Distinction
+  cwe_351:
+    question: Does the function fail to distinguish between different kinds of values or elements, such as treating a string and a number, a file and a directory, or two message types, as the same in a security decision?
+    message: Different kinds of values are treated alike in a security decision. Check the exact type before deciding
+    severity: warning
+
+  # CWE-353 Missing Support for Integrity Check
+  cwe_353:
+    question: Does the function send or receive data over a protocol or format without any integrity check, such as a checksum, MAC or signature, where corruption or tampering matters?
+    message: Data has no integrity check. Add a MAC, signature or checksum and verify it on receipt
+    severity: warning
+
+  # CWE-354 Improper Validation of Integrity Check Value
+  cwe_354:
+    question: Does the function receive a checksum, MAC or integrity value with data but not verify it, or verify it incorrectly, before using the data?
+    message: The integrity value is not checked, or is checked wrongly. Recompute it and compare, rejecting data that does not match
+    severity: error
+
+  # CWE-356 Product UI does not Warn User of Unsafe Actions
+  cwe_356:
+    question: Does the function perform a dangerous or irreversible action on the user's behalf, such as deleting data, running downloaded code or sending money, without warning the user first?
+    message: A dangerous action runs without warning the user. Warn the user and ask for confirmation first
+    severity: info
+
+  # CWE-357 Insufficient UI Warning of Dangerous Operations
+  cwe_357:
+    question: Does the function present a warning about a dangerous operation in a way the user is likely to miss, such as a hidden, default-accepted or easily dismissed prompt?
+    message: The warning about a dangerous action is easy to miss. Make it prominent and require an explicit choice
+    severity: info
+
+  # CWE-358 Improperly Implemented Security Check for Standard
+  cwe_358:
+    question: Does the function implement a standard protocol, algorithm or technique but omit or get wrong one of its required security checks?
+    message: A security check required by the standard is missing or wrong. Implement every check the standard requires, or use a vetted library
+    severity: error
+
+  # CWE-359 Exposure of Private Personal Information to an Unauthorized Actor
+  cwe_359:
+    question: Does the function expose personal information, such as names, addresses, health, financial or location data, to users or systems that are not authorised or did not get consent to see it?
+    message: Personal information is exposed to someone not authorised to see it. Check authorisation and consent, and return only what is permitted
+    severity: error
+
+  # CWE-360 Trust of System Event Data
+  cwe_360:
+    question: Does the function trust system events, messages or notifications as proof of their origin, without verifying who sent them?
+    message: Events are trusted without checking who sent them. Verify the sender before acting on the event
+    severity: warning
+
+  # CWE-364 Signal Handler Race Condition
+  cwe_364:
+    question: Does the function install or implement a signal handler that uses non-reentrant functions, such as malloc or printf, or modifies shared state that the interrupted code also uses?
+    message: The signal handler can race with the code it interrupts. Only set a volatile sig_atomic_t flag in the handler, and do the work elsewhere
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-366 Race Condition within a Thread
+  cwe_366:
+    question: Does the function read or modify data shared between threads without a lock, atomic operation or other synchronisation?
+    message: Shared data is used across threads without synchronisation. Protect it with a lock, or use atomic operations
+    severity: error
+
+  # CWE-367 Time-of-check Time-of-use (TOCTOU) Race Condition
+  cwe_367:
+    question: Does the function check a property of a file or resource, such as existence, permissions or ownership, and then use it separately, so the resource could change between the check and the use?
+    message: The resource can change between the check and the use. Act on it atomically, or check through the handle you then use
+    severity: error
+
+  # CWE-368 Context Switching Race Condition
+  cwe_368:
+    question: Does the function switch between security contexts, such as users, origins or privilege levels, through several non-atomic steps that another actor could act during?
+    message: Another actor can act in the middle of this context switch. Make the switch atomic, or block access until it completes
+    severity: warning
+
+  # CWE-369 Divide By Zero
+  cwe_369:
+    question: Does the function divide or take a modulus by a value that could be zero, such as an input, count or computed difference, without checking it first?
+    message: The divisor could be zero. Check it before dividing and handle the zero case
+    severity: error
+
+  # CWE-372 Incomplete Internal State Distinction
+  cwe_372:
+    question: Does the function decide which state it is in from incomplete information, so it could act as if in one state while actually in another, such as treating a pending request as complete?
+    message: The code can mistake which state it is in. Track the state explicitly and check it before acting
+    severity: warning
+
+  # CWE-374 Passing Mutable Objects to an Untrusted Method
+  cwe_374:
+    question: Does the function pass a mutable object that it relies on, such as an internal list or buffer, to untrusted or external code without copying it first?
+    message: Untrusted code receives a mutable object this code relies on and can change it. Pass a copy or an immutable view
+    severity: warning
+
+  # CWE-375 Returning a Mutable Object to an Untrusted Caller
+  cwe_375:
+    question: Does the function return a reference to internal mutable state, such as a private list, map or array, that the caller could modify?
+    message: The caller can modify internal state through the returned reference. Return a copy or an immutable view
+    severity: warning
+
+  # CWE-378 Creation of Temporary File With Insecure Permissions
+  cwe_378:
+    question: Does the function create a temporary file with a predictable name or with permissions that let other users read or write it?
+    message: The temporary file is predictable or readable by others. Use a secure temporary file API that creates it atomically with private permissions
+    severity: error
+
+  # CWE-379 Creation of Temporary File in Directory with Insecure Permissions
+  cwe_379:
+    question: Does the function create a temporary file in a shared or world-writable directory where other users can see or tamper with it?
+    message: The temporary file sits in a directory other users can access. Create it in a private directory, or with a secure temporary file API
+    severity: warning
+
+  # CWE-385 Covert Timing Channel
+  cwe_385:
+    question: Does the function let secret information influence the timing of observable behaviour, such as when messages are sent or how long operations take, so it could be inferred by watching?
+    message: Secret information affects observable timing. Make timing independent of secret data
+    severity: info
+
+  # CWE-386 Symbolic Name not Mapping to Correct Object
+  cwe_386:
+    question: Does the function refer to an object by a fixed name or path, such as a file, lock or named resource, that could resolve to a different object at different times?
+    message: A fixed name may refer to a different object over time. Keep a handle to the object instead of looking it up by name again
+    severity: warning
+
+  # CWE-390 Detection of Error Condition Without Action
+  cwe_390:
+    question: Does the function detect an error, for example by catching an exception or checking a return code, and then do nothing about it, such as an empty catch block or a pass?
+    message: An error is detected and then ignored. Handle it, report it, or let it propagate
+    severity: warning
+
+  # CWE-391 Unchecked Error Condition
+  cwe_391:
+    question: Does the function ignore exceptions or error conditions so they go unnoticed, for example by catching and discarding them or not checking error results?
+    message: Errors are silently ignored. Check and handle them, or let them propagate
+    severity: warning
+
+  # CWE-392 Missing Report of Error Condition
+  cwe_392:
+    question: Does the function encounter an error but return normally, without an error code, exception or other signal that it failed?
+    message: The function fails without telling its caller. Return an error or raise an exception when it fails
+    severity: warning
+
+  # CWE-393 Return of Wrong Status Code
+  cwe_393:
+    question: Does the function return a status code or value that does not reflect what actually happened, such as success after a failure or a generic error for a specific one?
+    message: The returned status does not match what happened. Return the status that reflects the real outcome
+    severity: warning
+
+  # CWE-394 Unexpected Status Code or Return Value
+  cwe_394:
+    question: Does the function call something that can return valid but unexpected values, such as zero, empty, partial or none, without handling those values?
+    message: A valid but unexpected return value is not handled. Handle every value the called function can return
+    severity: warning
+
+  # CWE-395 Use of NullPointerException Catch to Detect NULL Pointer Dereference
+  cwe_395:
+    question: Does the function catch a NullPointerException, or equivalent null reference error, instead of checking for null before use?
+    message: A null reference error is caught instead of checking for null. Check for null explicitly before using the value
+    severity: warning
+    languages:
+      - java
+
+  # CWE-396 Declaration of Catch for Generic Exception
+  cwe_396:
+    question: Does the function catch a broad exception type, such as Exception, Throwable, BaseException, a bare except or catch (...), where specific exceptions should be handled?
+    message: A broad exception catch can hide unexpected errors. Catch only the specific exceptions you can handle
+    severity: warning
+
+  # CWE-397 Declaration of Throws for Generic Exception
+  cwe_397:
+    question: Does the function raise, throw or declare a generic exception type, such as Exception, Throwable or RuntimeError, instead of a specific one callers can handle?
+    message: A generic exception type makes the error hard to handle. Raise a specific exception type
+    severity: warning
+
+  # CWE-403 Exposure of File Descriptor to Unintended Control Sphere ('File Descriptor Leak')
+  cwe_403:
+    question: Does the function start a child process while sensitive file descriptors or handles, such as sockets, key files or database connections, are open and inheritable?
+    message: The child process inherits sensitive open handles. Mark them close-on-exec, or close them before starting the child
+    severity: warning
+
+  # CWE-408 Incorrect Behavior Order: Early Amplification
+  cwe_408:
+    question: Does the function perform expensive work, such as heavy computation, large allocations, database queries or outbound calls, before authenticating or authorising the caller?
+    message: Expensive work runs before the caller is authenticated. Authenticate and authorise first
+    severity: warning
+
+  # CWE-409 Improper Handling of Highly Compressed Data (Data Amplification)
+  cwe_409:
+    question: Does the function decompress or expand input, such as zip, gzip, XML entities or images, without limiting the output size or compression ratio?
+    message: Decompressing input has no size limit, so a small bomb can exhaust memory or disk. Cap the output size and ratio while decompressing
+    severity: error
+
+  # CWE-410 Insufficient Resource Pool
+  cwe_410:
+    question: Does the function use a resource pool, such as connections, threads or workers, sized so that a burst of requests could exhaust it and block other users?
+    message: The resource pool can be exhausted by a burst of requests. Size it for peak demand, and limit how much one caller can take
+    severity: info
+
+  # CWE-412 Unrestricted Externally Accessible Lock
+  cwe_412:
+    question: Does the function rely on a lock, such as a lock file or named mutex, that other users or processes outside its control can create or hold?
+    message: An outside actor can take this lock and block the program. Use a lock in a location only this program can access
+    severity: warning
+
+  # CWE-413 Improper Resource Locking
+  cwe_413:
+    question: Does the function need exclusive access to a shared resource, such as a file, record or shared memory, but not lock it, or lock it incorrectly?
+    message: A shared resource is used without the exclusive lock it needs. Lock it for the whole operation
+    severity: error
+
+  # CWE-414 Missing Lock Check
+  cwe_414:
+    question: Does the function perform a sensitive operation on a shared resource without checking whether another process or thread holds its lock?
+    message: The lock is not checked before a sensitive operation. Acquire or check the lock first
+    severity: warning
+
+  # CWE-419 Unprotected Primary Channel
+  cwe_419:
+    question: Does the function expose administrative or restricted functionality on a channel, such as an admin endpoint or management port, without authentication or encryption?
+    message: Restricted functionality is reachable on an unprotected channel. Protect it with authentication and encryption
+    severity: error
+
+  # CWE-420 Unprotected Alternate Channel
+  cwe_420:
+    question: Does the function provide an alternate way to reach functionality, such as a debug endpoint, backup API or internal route, with weaker protection than the main path?
+    message: An alternate path has weaker protection than the main one. Apply the same authentication and authorisation checks to every path
+    severity: error
+
+  # CWE-421 Race Condition During Access to Alternate Channel
+  cwe_421:
+    question: Does the function open a secondary channel, such as a callback port, temporary socket or file, for an authorised user, where another actor could reach it first?
+    message: Another actor can reach this secondary channel before the intended user. Authenticate the connection on the channel
+    severity: warning
+
+  # CWE-425 Direct Request ('Forced Browsing')
+  cwe_425:
+    question: Does the function serve a restricted page, file or endpoint without checking that the requester is authorised, relying on the URL being unlinked or hard to guess?
+    message: A restricted resource is served without an authorisation check. Check authorisation on every request for it
+    severity: error
+
+  # CWE-426 Untrusted Search Path
+  cwe_426:
+    question: Does the function load programs, libraries or configuration using a search path that comes from the environment or user input, such as PATH or LD_LIBRARY_PATH, rather than an absolute trusted location?
+    message: Critical files are found through an untrusted search path. Use absolute paths to trusted locations
+    severity: error
+
+  # CWE-427 Uncontrolled Search Path Element
+  cwe_427:
+    question: Does the function search for executables, libraries or modules in a path that includes locations others can write to, such as the current directory, temp directories or user folders?
+    message: A location in the search path can be controlled by others. Remove writable locations from the path, or use absolute paths
+    severity: error
+
+  # CWE-428 Unquoted Search Path or Element
+  cwe_428:
+    question: Does the function build or use a path to an executable containing spaces without quoting it, so it could run a program from a parent directory?
+    message: An unquoted path with spaces can run the wrong program. Quote the path, or pass it as a separate argument
+    severity: warning
+
+  # CWE-430 Deployment of Wrong Handler
+  cwe_430:
+    question: Does the function dispatch an object or request to a handler chosen by an untrusted attribute, such as a guessed file type or extension, that could select the wrong handler?
+    message: The handler is chosen from untrusted information and can be the wrong one. Choose it from verified type information
+    severity: warning
+
+  # CWE-431 Missing Handler
+  cwe_431:
+    question: Does the function lack a handler for an event, exception, message type or case that it can receive, such as a missing default branch?
+    message: A case, event or exception that can occur has no handler. Add a handler, even if it only fails safely
+    severity: warning
+
+  # CWE-434 Unrestricted Upload of File with Dangerous Type
+  cwe_434:
+    question: Does the function accept an uploaded file without restricting its type, extension and content, and store it where it could be served or executed?
+    message: Uploaded files of any type are accepted and could be executed. Allow only safe types, check the content, and store uploads outside executable locations
+    severity: error
+
+  # CWE-437 Incomplete Model of Endpoint Features
+  cwe_437:
+    question: Does the function act as a proxy, filter or monitor between two systems but interpret requests or data differently from how the endpoint will, for example parsing headers or paths in another way?
+    message: This intermediary can interpret data differently from the endpoint. Parse exactly as the endpoint does, or normalise before forwarding
+    severity: warning
+
+  # CWE-439 Behavioral Change in New Version or Environment
+  cwe_439:
+    question: Does the function depend on behaviour of a library, API or platform that differs between versions or environments, without pinning or checking the version?
+    message: The code relies on behaviour that changes between versions or environments. Pin the version, or check for the behaviour you need
+    severity: info
+
+  # CWE-440 Expected Behavior Violation
+  cwe_440:
+    question: Does the function behave differently from its specification, documentation or the contract its name and signature imply?
+    message: The function does not behave as specified. Fix the behaviour or correct the specification
+    severity: warning
+
+  # CWE-444 Inconsistent Interpretation of HTTP Requests ('HTTP Request/Response Smuggling')
+  cwe_444:
+    question: Does the function forward or parse HTTP requests or responses, as a proxy, gateway or server, in a way that could interpret ambiguous framing, such as both Content-Length and Transfer-Encoding or duplicated headers, differently from the next hop?
+    message: Ambiguous HTTP framing could be read differently here and downstream, allowing request smuggling. Reject messages with conflicting or duplicated length headers
+    severity: error
+
+  # CWE-447 Unimplemented or Unsupported Feature in UI
+  cwe_447:
+    question: Does the function present or report a security feature as enabled or working, such as a setting toggle or confirmation, when the underlying behaviour is not implemented?
+    message: A security feature appears to work but does nothing. Implement it, or remove it from the interface
+    severity: warning
+
+  # CWE-448 Obsolete Feature in UI
+  cwe_448:
+    question: Does the function keep offering a feature or option that is obsolete or no longer has effect, without warning the user?
+    message: An obsolete feature is offered without warning. Remove it, or warn the user it no longer works
+    severity: info
+
+  # CWE-449 The UI Performs the Wrong Action
+  cwe_449:
+    question: Does the function perform a different action from the one the user requested, such as acting on the wrong item or applying the wrong operation?
+    message: The action performed differs from what the user asked for. Make the action match the request
+    severity: warning
+
+  # CWE-454 External Initialization of Trusted Variables or Data Stores
+  cwe_454:
+    question: Does the function initialise critical internal variables, settings or data stores from input that untrusted users can control, such as request parameters, cookies or environment variables?
+    message: Critical internal state is initialised from untrusted input. Initialise it from trusted sources, and validate anything external
+    severity: error
+
+  # CWE-455 Non-exit on Failed Initialization
+  cwe_455:
+    question: Does the function continue running after a security-relevant initialisation step fails, such as loading configuration, keys, certificates or a security module, possibly in a less secure mode?
+    message: Startup continues after a security setup step fails. Stop, or refuse to serve, when security initialisation fails
+    severity: error
+
+  # CWE-459 Incomplete Cleanup
+  cwe_459:
+    question: Does the function create temporary or supporting resources, such as files, directories, processes or records, and fail to remove them on every path, including errors?
+    message: Temporary resources are not cleaned up on every path. Remove them in a finally block, a context manager or equivalent
+    severity: warning
+
+  # CWE-463 Deletion of Data Structure Sentinel
+  cwe_463:
+    question: Does the function overwrite or delete a sentinel that marks the structure of data, such as a string's null terminator or a list's end marker, for example by writing one element too far?
+    message: A structural sentinel such as a terminator can be deleted. Check bounds so writes never overwrite the sentinel
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-464 Addition of Data Structure Sentinel
+  cwe_464:
+    question: Does the function insert data that can contain a sentinel value, such as a null byte or end marker, into a structure where it would be misread as the end?
+    message: Data containing a sentinel value can be mistaken for the end of the structure. Reject or escape sentinel values in the data
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-466 Return of Pointer Value Outside of Expected Range
+  cwe_466:
+    question: Does the function return a pointer that can point outside the buffer it is supposed to reference, for example after unchecked pointer arithmetic?
+    message: The returned pointer can fall outside the intended buffer. Check the pointer stays within bounds before returning it
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-468 Incorrect Pointer Scaling
+  cwe_468:
+    question: Does the function add a byte offset to a typed pointer, or otherwise mix byte counts with pointer arithmetic that is already scaled by the element size?
+    message: Pointer arithmetic scales by element size, so a byte offset here points too far. Use element counts, or cast to a byte pointer first
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-469 Use of Pointer Subtraction to Determine Size
+  cwe_469:
+    question: Does the function subtract two pointers to compute a size or length where the pointers may not point into the same array or allocation?
+    message: Subtracting pointers into different objects gives a meaningless size. Track the length explicitly
+    severity: warning
+    languages:
+      - c
+      - cpp
+
+  # CWE-470 Use of Externally-Controlled Input to Select Classes or Code ('Unsafe Reflection')
+  cwe_470:
+    question: Does the function use caller or user input to choose which class, module, function or method to load, instantiate or call through reflection or dynamic lookup, without an allow list?
+    message: Input chooses which code to load or call. Map the input to an explicit allow list of classes or functions
+    severity: error
+
+  # CWE-472 External Control of Assumed-Immutable Web Parameter
+  cwe_472:
+    question: Does the function trust a value from the client that is assumed not to change, such as a hidden form field, price, user ID or role in a request, without checking it on the server?
+    message: A value the client can change is trusted as fixed. Look it up or recompute it on the server
+    severity: error
+
+  # CWE-474 Use of Function with Inconsistent Implementations
+  cwe_474:
+    question: Does the function call a function whose behaviour differs across operating systems, platforms or versions in ways the code depends on?
+    message: This relies on a function that behaves differently across platforms or versions. Use a portable alternative, or handle each behaviour
+    severity: info
+
+  # CWE-475 Undefined Behavior for Input to API
+  cwe_475:
+    question: Does the function call an API with an argument value for which the API's behaviour is undefined, such as overlapping buffers to memcpy or an invalid flag?
+    message: The API is called with arguments that give undefined behaviour. Pass only values the API documents as valid
+    severity: warning
+
+  # CWE-476 NULL Pointer Dereference
+  cwe_476:
+    question: Does the function dereference a pointer, reference or optional value that can be null, None or nil, such as a lookup or allocation result, without checking it first?
+    message: A value that can be null is used without checking. Check it and handle the null case
+    severity: error
+
+  # CWE-477 Use of Obsolete Function
+  cwe_477:
+    question: Does the function call a deprecated or obsolete function or API when a maintained replacement exists?
+    message: This calls a deprecated function. Switch to its maintained replacement
+    severity: info
+
+  # CWE-478 Missing Default Case in Multiple Condition Expression
+  cwe_478:
+    question: Does the function use a switch, match or chain of conditions over a set of values without a default or else branch, where unlisted values would be silently ignored?
+    message: Values not listed in this switch or condition chain are silently ignored. Add a default branch that handles or rejects them
+    severity: warning
+
+  # CWE-480 Use of Incorrect Operator
+  cwe_480:
+    question: Does the function use the wrong operator, such as = instead of ==, & instead of &&, | instead of ||, or a flipped comparison, in a way that changes its logic?
+    message: An operator here looks wrong and changes the logic. Check whether a different operator was intended
+    severity: error
+
+  # CWE-483 Incorrect Block Delimitation
+  cwe_483:
+    question: Does the function contain an if, else or loop without braces or explicit delimiters where the indentation suggests more statements belong to the block than actually do?
+    message: A statement looks like it is inside a block but is not. Add explicit braces around the block
+    severity: warning
+    languages:
+      - c
+      - cpp
+
+  # CWE-484 Omitted Break Statement in Switch
+  cwe_484:
+    question: Does the function have a switch case that falls through into the next case without a break, where falling through does not seem intended?
+    message: A case falls through into the next one. Add a break, or mark the fall-through as intended
+    severity: warning
+
+  # CWE-487 Reliance on Package-level Scope
+  cwe_487:
+    question: Does the function rely on Java package-private or default visibility to protect sensitive data or operations from other code?
+    message: Package visibility is not a security boundary. Make sensitive members private and check permissions explicitly
+    severity: warning
+    languages:
+      - java
+
+  # CWE-488 Exposure of Data Element to Wrong Session
+  cwe_488:
+    question: Does the function store request- or session-specific data in shared state, such as a singleton, static field, global or cached object, where another session could see or use it?
+    message: Data for one session is kept where another session can reach it. Keep it in request or session scope
+    severity: error
+
+  # CWE-489 Active Debug Code
+  cwe_489:
+    question: Does the function contain debugging code that is active in production, such as debug endpoints, verbose tracing, test backdoors or debug flags turned on?
+    message: Debug code is left active. Remove it, or make sure it cannot run in production
+    severity: warning
+
+  # CWE-494 Download of Code Without Integrity Check
+  cwe_494:
+    question: Does the function download code, scripts, binaries or packages and run or install them without verifying a checksum or signature?
+    message: Downloaded code is run without checking its integrity. Verify its signature or pinned checksum before running it
+    severity: error
+
+  # CWE-497 Exposure of Sensitive System Information to an Unauthorized Control Sphere
+  cwe_497:
+    question: Does the function expose system details, such as versions, paths, hostnames, environment variables or internal addresses, to users or callers who should not see them?
+    message: System details are exposed to people who should not see them. Remove them from responses and error pages
+    severity: warning
+
+  # CWE-501 Trust Boundary Violation
+  cwe_501:
+    question: Does the function put untrusted input into a data structure, session or message that the rest of the code treats as trusted, without validating it first?
+    message: Untrusted data is mixed into a trusted structure. Validate it before storing it alongside trusted data
+    severity: warning
+
+  # CWE-502 Deserialization of Untrusted Data
+  cwe_502:
+    question: Does the function deserialise data from an untrusted source with a format that can construct arbitrary objects, such as pickle, Java serialisation, YAML load without a safe loader or PHP unserialize?
+    message: Untrusted data is deserialised in a way that can run code. Use a data-only format such as JSON, or a safe loader with an allow list of types
+    severity: error
+
+  # CWE-515 Covert Storage Channel
+  cwe_515:
+    question: Does the function encode information in storage side effects, such as file attributes, flags or unused fields, where another program could read it covertly?
+    message: Information may leak through a covert storage channel. Remove the side effect, or make it independent of secret data
+    severity: info
+
+  # CWE-521 Weak Password Requirements
+  cwe_521:
+    question: Does the function set or accept user passwords without enforcing strength requirements such as minimum length or checks against common or breached passwords?
+    message: Weak passwords are accepted. Enforce a minimum length and reject common or breached passwords
+    severity: warning
+
+  # CWE-523 Unprotected Transport of Credentials
+  cwe_523:
+    question: Does the function send or accept login credentials over a channel that is not encrypted, such as an http form, plain socket or URL query string?
+    message: Credentials travel unprotected. Send them only over TLS, and never in the URL
+    severity: error
+
+  # CWE-524 Use of Cache Containing Sensitive Information
+  cwe_524:
+    question: Does the function put sensitive information into a cache, such as a shared, HTTP, CDN or on-disk cache, that others outside the intended audience could read?
+    message: Sensitive data is cached where others can read it. Do not cache it, or mark responses private and no-store
+    severity: warning
+
+  # CWE-538 Insertion of Sensitive Information into Externally-Accessible File or Directory
+  cwe_538:
+    question: Does the function write sensitive information, such as secrets, credentials or personal data, into files or directories that are accessible to users who should not see it, such as public web roots or shared folders?
+    message: Sensitive data is written where others can read it. Write it to a private location with restricted permissions
+    severity: error
+
+  # CWE-544 Missing Standardized Error Handling Mechanism
+  cwe_544:
+    question: Does the function handle errors in its own ad hoc way, such as custom codes, printing or swallowing, instead of the standard error mechanism the rest of the codebase uses?
+    message: Errors are handled differently from the rest of the codebase. Use the project's standard error handling mechanism
+    severity: info
+
+  # CWE-547 Use of Hard-coded, Security-relevant Constants
+  cwe_547:
+    question: Does the function use hard coded literal values for security-critical settings, such as key sizes, iteration counts, timeouts, roles or permission bits, instead of named constants or configuration?
+    message: A security-critical value is a bare literal. Give it a named constant or read it from configuration
+    severity: info
+
+  # CWE-549 Missing Password Field Masking
+  cwe_549:
+    question: Does the function display, echo or accept a password in a visible field, prompt or output instead of masking it?
+    message: A password is shown on screen while being entered. Mask it, for example with a password field or getpass
+    severity: warning
+
+  # CWE-551 Incorrect Behavior Order: Authorization Before Parsing and Canonicalization
+  cwe_551:
+    question: Does the function make an authorisation decision on a URL, path or request before fully decoding and canonicalising it?
+    message: Authorisation checks the request before it is canonicalised, so encoded forms can bypass it. Decode and normalise first, then authorise
+    severity: error
+
+  # CWE-552 Files or Directories Accessible to External Parties
+  cwe_552:
+    question: Does the function make files or directories available, for example by serving, sharing or listing them, to users who should not have access to them?
+    message: Files are made available to people who should not reach them. Serve only an explicit set of files, and check access
+    severity: error
+
+  # CWE-561 Dead Code
+  cwe_561:
+    question: Does the function contain code that can never execute, such as statements after an unconditional return, raise or break, or a branch whose condition can never be true?
+    message: Some code here can never run. Remove it, or fix the condition that makes it unreachable
+    severity: info
+
+  # CWE-562 Return of Stack Variable Address
+  cwe_562:
+    question: Does the function return a pointer or reference to one of its own local variables or stack memory?
+    message: A pointer to a local variable is returned and is invalid once the function returns. Return the value itself, or allocate it on the heap
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-563 Assignment to Variable without Use
+  cwe_563:
+    question: Does the function assign a value to a variable that is never read before being overwritten or going out of scope?
+    message: A value is assigned and never used. Remove the assignment, or use the value if it was meant to be used
+    severity: info
+
+  # CWE-565 Reliance on Cookies without Validation and Integrity Checking
+  cwe_565:
+    question: Does the function rely on a cookie's presence or value for a security decision, such as authentication, role or price, without validating or signing it?
+    message: A security decision trusts a cookie the client can change. Sign the cookie and verify it, or keep the value on the server
+    severity: error
+
+  # CWE-570 Expression is Always False
+  cwe_570:
+    question: Does the function contain a condition or expression that always evaluates to false?
+    message: This condition is always false. Fix the condition, or remove the code it guards
+    severity: warning
+
+  # CWE-571 Expression is Always True
+  cwe_571:
+    question: Does the function contain a condition or expression that always evaluates to true?
+    message: This condition is always true. Fix the condition, or remove the redundant check
+    severity: warning
+
+  # CWE-580 clone() Method Without super.clone()
+  cwe_580:
+    question: Is this a clone method that creates its copy with a constructor or new instead of calling super.clone()?
+    message: clone does not call super.clone, so subclasses get the wrong type. Obtain the copy from super.clone()
+    severity: warning
+    languages:
+      - java
+
+  # CWE-581 Object Model Violation: Just One of Equals and Hashcode Defined
+  cwe_581:
+    question: Does the class or function define equality without a matching hash code, or a hash code without matching equality, so equal objects can have different hashes?
+    message: Equality and hashing disagree, so equal objects can have different hashes. Define both from the same fields
+    severity: warning
+    languages:
+      - java
+
+  # CWE-584 Return Inside Finally Block
+  cwe_584:
+    question: Does the function return from inside a finally block, discarding any exception raised in the try block?
+    message: A return in finally swallows exceptions from the try block. Move the return out of the finally block
+    severity: warning
+
+  # CWE-586 Explicit Call to Finalize()
+  cwe_586:
+    question: Does the function explicitly call finalize() on an object?
+    message: Calling finalize directly can release resources twice. Use an explicit close method instead
+    severity: warning
+    languages:
+      - java
+
+  # CWE-587 Assignment of a Fixed Address to a Pointer
+  cwe_587:
+    question: Does the function assign a fixed numeric address, other than null, to a pointer?
+    message: A pointer is set to a fixed address that will not be valid everywhere. Obtain the address from the platform or an allocation
+    severity: error
+
+  # CWE-601 URL Redirection to Untrusted Site ('Open Redirect')
+  cwe_601:
+    question: Does the function redirect the user to a URL taken from caller or user input without checking it against an allow list of destinations?
+    message: The redirect target comes from input, allowing an open redirect. Redirect only to relative paths or an allow list of hosts
+    severity: error
+
+  # CWE-603 Use of Client-Side Authentication
+  cwe_603:
+    question: Does the function rely on authentication or authorisation checks performed in client-side code, without the server checking again?
+    message: Authentication happens only in the client, which a modified client can skip. Check it on the server
+    severity: error
+
+  # CWE-605 Multiple Binds to the Same Port
+  cwe_605:
+    question: Does the function bind a socket with options, such as SO_REUSEADDR or SO_REUSEPORT, that let another process bind the same port and steal or spoof traffic?
+    message: Another process can bind the same port and intercept traffic. Avoid port-sharing options, or use exclusive binding
+    severity: warning
+
+  # CWE-606 Unchecked Input for Loop Condition
+  cwe_606:
+    question: Does the function use caller or user input as a loop bound or iteration count without limiting it?
+    message: Input controls how many times this loop runs. Cap the loop bound to a sensible maximum
+    severity: error
+
+  # CWE-609 Double-Checked Locking
+  cwe_609:
+    question: Does the function use double-checked locking, checking a field outside a lock and again inside, without the field being volatile or atomic?
+    message: Double-checked locking without a volatile or atomic field can see a half-built object. Make the field volatile, or use a safe lazy initialiser
+    severity: error
+    languages:
+      - java
+
+  # CWE-611 Improper Restriction of XML External Entity Reference
+  cwe_611:
+    question: Does the function parse XML from an untrusted source with external entities or DTD processing enabled?
+    message: The XML parser resolves external entities, so input can read files or make requests. Disable DTDs and external entities, or use a hardened parser
+    severity: error
+
+  # CWE-613 Insufficient Session Expiration
+  cwe_613:
+    question: Does the function create or accept sessions or tokens without an expiry, or with an excessively long one, or fail to invalidate them on logout?
+    message: Sessions do not expire or are not invalidated. Set an expiry and invalidate sessions on logout
+    severity: warning
+
+  # CWE-617 Reachable Assertion
+  cwe_617:
+    question: Does the function use an assert or panic that caller or user input can trigger, crashing or exiting the program where a handled error would do?
+    message: Input can trigger an assertion and crash the program. Validate the input and return an error instead
+    severity: warning
+
+  # CWE-618 Exposed Unsafe ActiveX Method
+  cwe_618:
+    question: Does the function expose methods to web page scripts, such as through ActiveX, a browser plugin, a webview bridge or a scripting interface, that can perform actions outside the browser sandbox?
+    message: Web content can call a dangerous method outside the sandbox. Remove the method, or restrict it to trusted origins
+    severity: error
+
+  # CWE-619 Dangling Database Cursor ('Cursor Injection')
+  cwe_619:
+    question: Does the function open a database cursor or result set without closing it on every path, including errors?
+    message: A database cursor can be left open. Close it in a finally block or context manager
+    severity: warning
+
+  # CWE-620 Unverified Password Change
+  cwe_620:
+    question: Does the function change a user's password without requiring the current password or another re-authentication?
+    message: The password can be changed without re-authenticating. Require the current password or another proof of identity
+    severity: error
+
+  # CWE-624 Executable Regular Expression Error
+  cwe_624:
+    question: Does the function build a regular expression from caller or user input in a way that could enable code execution, such as preg_replace with the e modifier or an eval flag?
+    message: A regular expression built from input can execute code. Escape input in patterns and never enable evaluation modifiers
+    severity: error
+    languages:
+      - php
+      - perl
+
+  # CWE-625 Permissive Regular Expression
+  cwe_625:
+    question: Does the function validate input with a regular expression that is too permissive, for example unanchored so it matches a substring, or a character class that is too broad?
+    message: The regular expression accepts more than intended. Anchor it and tighten its character classes
+    severity: warning
+    languages:
+      - php
+      - perl
+
+  # CWE-628 Function Call with Incorrectly Specified Arguments
+  cwe_628:
+    question: Does the function call another function with arguments that are wrong, such as in the wrong order, the wrong variable, a wrong count or the wrong type or unit?
+    message: A call passes the wrong arguments. Check each argument's order, value and meaning against the called function
+    severity: error
+
+  # CWE-639 Authorization Bypass Through User-Controlled Key
+  cwe_639:
+    question: Does the function fetch, update or delete a record identified by a key from the request, such as an ID in the URL or body, without checking the record belongs to or is permitted for the caller?
+    message: Changing the ID in the request reaches another user's data. Check the record belongs to or is allowed for the caller
+    severity: error
+
+  # CWE-640 Weak Password Recovery Mechanism for Forgotten Password
+  cwe_640:
+    question: Does the function implement password recovery in a weak way, such as security questions, predictable or long-lived reset tokens, or sending the password itself?
+    message: Password recovery is weak. Send a single-use, short-lived, random reset link to a verified address
+    severity: error
+
+  # CWE-641 Improper Restriction of Names for Files and Other Resources
+  cwe_641:
+    question: Does the function build a file or resource name from input without restricting its length or characters, so the name could contain scripting, separators or reserved names?
+    message: A resource name built from input is not restricted. Allow only safe characters and a bounded length
+    severity: warning
+
+  # CWE-645 Overly Restrictive Account Lockout Mechanism
+  cwe_645:
+    question: Does the function lock accounts so easily, such as after very few failures or permanently, that an attacker could deliberately lock out legitimate users?
+    message: The lockout is easy to trigger against other users. Use increasing delays or temporary lockouts instead
+    severity: info
+
+  # CWE-648 Incorrect Use of Privileged APIs
+  cwe_648:
+    question: Does the function call a privileged API incorrectly, such as without the required checks, in the wrong order or with unvalidated arguments?
+    message: A privileged API is used incorrectly. Follow the API's requirements for privilege and argument checks
+    severity: error
+
+  # CWE-649 Reliance on Obfuscation or Encryption of Security-Relevant Inputs without Integrity Checking
+  cwe_649:
+    question: Does the function rely on encrypting or obfuscating a value sent to the client, such as a token or hidden field, without an integrity check to detect tampering?
+    message: Encrypted or obfuscated client data can be tampered with undetected. Add a MAC or use authenticated encryption
+    severity: error
+
+  # CWE-653 Improper Isolation or Compartmentalization
+  cwe_653:
+    question: Does the function mix operations that need different privilege levels in one place, without separating or isolating them?
+    message: Operations needing different privileges are not isolated. Separate privileged work into its own component with its own checks
+    severity: warning
+
+  # CWE-654 Reliance on a Single Factor in a Security Decision
+  cwe_654:
+    question: Does the function make an access decision based on a single condition that could be spoofed or wrong, such as one header, flag or IP address?
+    message: Access depends on a single condition. Combine independent checks for this decision
+    severity: warning
+
+  # CWE-656 Reliance on Security Through Obscurity
+  cwe_656:
+    question: Does the function rely on secrecy of its algorithm, hidden URLs, obfuscation or undocumented parameters as the main security protection?
+    message: Security relies on obscurity. Use real authentication, authorisation or cryptography
+    severity: warning
+
+  # CWE-663 Use of a Non-reentrant Function in a Concurrent Context
+  cwe_663:
+    question: Does the function call a non-reentrant function, such as strtok, localtime or rand, from threads or signal handlers where another call could interleave?
+    message: A non-reentrant function is used where calls can interleave. Use the reentrant variant, such as strtok_r
+    severity: warning
+
+  # CWE-676 Use of Potentially Dangerous Function
+  cwe_676:
+    question: Does the function call a function that is dangerous if misused, such as strcpy, sprintf, strcat, system or memcpy, in a way that is not clearly safe?
+    message: A dangerous function is used without clear safety. Use a bounded or safer alternative
+    severity: warning
+    languages:
+      - c
+      - cpp
+
+  # CWE-681 Incorrect Conversion between Numeric Types
+  cwe_681:
+    question: Does the function convert between numeric types, such as long to int, float to int, or signed to unsigned, in a way that can truncate, overflow or change sign?
+    message: This numeric conversion can lose data or change sign. Check the value fits in the target type first
+    severity: error
+
+  # CWE-694 Use of Multiple Resources with Duplicate Identifier
+  cwe_694:
+    question: Does the function look up or operate on resources by an identifier that might not be unique, such as a name or non-unique field, where a unique identifier is required?
+    message: The identifier may match more than one resource. Use a unique identifier, or reject duplicates
+    severity: warning
+
+  # CWE-695 Use of Low-Level Functionality
+  cwe_695:
+    question: Does the function use low-level functionality that the framework or platform forbids, such as raw sockets, threads or file access inside a managed container, bypassing its protections?
+    message: This bypasses the framework using forbidden low-level calls. Use the framework's supported API
+    severity: warning
+
+  # CWE-698 Execution After Redirect (EAR)
+  cwe_698:
+    question: Does the function send or return a redirect but then keep executing code that should not run, such as a missing return after redirect?
+    message: Code keeps running after the redirect. Return or exit immediately after redirecting
+    severity: error
+
+  # CWE-708 Incorrect Ownership Assignment
+  cwe_708:
+    question: Does the function assign ownership of a resource, such as a file, record or object, to a user or process that should not own it?
+    message: A resource is given to the wrong owner. Assign ownership to the intended user or process
+    severity: warning
+
+  # CWE-733 Compiler Optimization Removal or Modification of Security-critical Code
+  cwe_733:
+    question: Does the function include security-critical code that a compiler may optimise away, such as clearing a secret with memset before free, or a check on undefined behaviour?
+    message: The compiler may remove this security-critical code. Use explicit_bzero, a volatile write or another optimisation-safe primitive
+    severity: warning
+
+  # CWE-749 Exposed Dangerous Method or Function
+  cwe_749:
+    question: Does the function expose a dangerous capability, such as running commands, reading files or evaluating code, through a public API or interface without restricting who can call it?
+    message: A dangerous operation is exposed without restriction. Remove it, or require authorisation to call it
+    severity: error
+
+  # CWE-756 Missing Custom Error Page
+  cwe_756:
+    question: Does the function let the framework's default error page or raw exception output reach the user instead of a custom error response?
+    message: Default error pages can expose internal details. Return a custom error response
+    severity: warning
+
+  # CWE-763 Release of Invalid Pointer or Reference
+  cwe_763:
+    question: Does the function free or release memory with the wrong function or pointer, such as free on memory from new, delete on malloc'd memory, or a pointer into the middle of a block?
+    message: Memory is released with the wrong function or pointer. Release it with the function matching how it was allocated, at its start address
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-764 Multiple Locks of a Critical Resource
+  cwe_764:
+    question: Does the function acquire the same lock more times than intended, for example locking a non-recursive mutex twice, which could deadlock?
+    message: A lock can be taken twice. Take each lock once per critical section, or use a reentrant lock deliberately
+    severity: error
+
+  # CWE-765 Multiple Unlocks of a Critical Resource
+  cwe_765:
+    question: Does the function release a lock more times than it acquired it, for example unlocking on several paths?
+    message: A lock can be released twice. Release it exactly once, for example with a scoped guard
+    severity: error
+
+  # CWE-766 Critical Data Element Declared Public
+  cwe_766:
+    question: Does the class or function declare a critical field, such as a password, key, balance or permission, as public?
+    message: A critical field is public. Make it private and control access through methods
+    severity: warning
+
+  # CWE-767 Access to Critical Private Variable via Public Method
+  cwe_767:
+    question: Does the function provide public access that reads or modifies a critical private variable without validation or authorisation?
+    message: A public method exposes critical private state. Validate and authorise access, or remove the method
+    severity: warning
+
+  # CWE-770 Allocation of Resources Without Limits or Throttling
+  cwe_770:
+    question: Does the function allocate resources, such as memory, threads, connections, files or queue entries, on behalf of a caller without limiting how much or how many?
+    message: Resources are allocated without a limit. Cap the size or count per caller and in total
+    severity: error
+
+  # CWE-771 Missing Reference to Active Allocated Resource
+  cwe_771:
+    question: Does the function allocate a resource and then lose every reference to it, so it can never be released?
+    message: A resource is allocated and then lost, so it cannot be released. Keep a reference and release it when done
+    severity: warning
+
+  # CWE-772 Missing Release of Resource after Effective Lifetime
+  cwe_772:
+    question: Does the function acquire a resource, such as a file, socket, connection, lock, handle or memory, and not release it on every path once it is no longer needed, including when an error occurs?
+    message: A resource is not released on every path. Release it in a finally block, a context manager, defer or RAII
+    severity: warning
+
+  # CWE-776 Improper Restriction of Recursive Entity References in DTDs ('XML Entity Expansion')
+  cwe_776:
+    question: Does the function parse XML from an untrusted source without limiting entity expansion, so recursive or nested entities could exhaust memory?
+    message: Untrusted XML can expand entities without limit. Disable DTDs, or use a parser that limits entity expansion
+    severity: error
+
+  # CWE-778 Insufficient Logging
+  cwe_778:
+    question: Does the function handle a security-critical event, such as a login, failed authorisation, permission change or data export, without logging it or while omitting key details such as who, what and when?
+    message: A security-critical event is not logged, or is logged without key details. Log the actor, action, target, outcome and time
+    severity: warning
+
+  # CWE-779 Logging of Excessive Data
+  cwe_779:
+    question: Does the function log far more data than needed, such as whole payloads, large objects or every iteration of a loop, making logs hard to use?
+    message: This logs much more than needed. Log only the fields that help diagnose problems
+    severity: info
+
+  # CWE-783 Operator Precedence Logic Error
+  cwe_783:
+    question: Does the function contain an expression whose meaning depends on operator precedence in a way that differs from what the code evidently intends, such as mixing & with == or ! with a comparison?
+    message: Operator precedence makes this expression mean something other than intended. Add parentheses to make the intended order explicit
+    severity: error
+
+  # CWE-786 Access of Memory Location Before Start of Buffer
+  cwe_786:
+    question: Does the function read or write a buffer through an index or pointer that can point before the start of the buffer, for example after decrementing or subtracting an offset?
+    message: An index or pointer can reach before the start of the buffer. Check it stays at or after the start
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-787 Out-of-bounds Write
+  cwe_787:
+    question: Does the function write to an array, buffer or pointer with an index or length that can exceed the buffer's bounds?
+    message: A write can go outside the buffer. Check every write's index and length against the buffer size
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-788 Access of Memory Location After End of Buffer
+  cwe_788:
+    question: Does the function read or write a buffer through an index or pointer that can go past its end, for example after an increment or an unchecked offset?
+    message: An index or pointer can go past the end of the buffer. Check it stays before the end
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-791 Incomplete Filtering of Special Elements
+  cwe_791:
+    question: Does the function filter special characters or sequences from input before passing it on, but miss some of them, such as only the first occurrence or only some of the dangerous characters?
+    message: The filter misses some special elements. Encode the output for its context, or filter every occurrence of every dangerous element
+    severity: warning
+
+  # CWE-798 Use of Hard-coded Credentials
+  cwe_798:
+    question: Does the function contain a hard coded password, API key, token, private key or other credential, either to authenticate to something or to check incoming credentials?
+    message: A credential is hard coded. Load it from a secret store or environment at runtime, and rotate the exposed one
+    severity: error
+
+  # CWE-804 Guessable CAPTCHA
+  cwe_804:
+    question: Does the function implement a CAPTCHA or human check that a program could easily guess or solve, such as a simple sum, a fixed set of answers or an answer exposed to the client?
+    message: The CAPTCHA can be solved automatically. Use a proven CAPTCHA service, and keep the answer on the server
+    severity: warning
+
+  # CWE-805 Buffer Access with Incorrect Length Value
+  cwe_805:
+    question: Does the function read or write a buffer with a length argument that can be wrong, such as the source length instead of the destination size, or sizeof a pointer?
+    message: The length used for this buffer access can be wrong. Use the destination buffer's actual size
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-807 Reliance on Untrusted Inputs in a Security Decision
+  cwe_807:
+    question: Does the function make a security decision, such as authentication, authorisation or pricing, based on input an untrusted actor can change, such as a cookie, header, hidden field or environment variable?
+    message: A security decision trusts input the caller can change. Base the decision on server-side state or verified credentials
+    severity: error
+
+  # CWE-820 Missing Synchronization
+  cwe_820:
+    question: Does the function use a resource shared between threads, processes or async tasks, such as a variable, file or collection, without any synchronisation?
+    message: A shared resource is used concurrently without synchronisation. Protect it with a lock or use a thread-safe structure
+    severity: error
+
+  # CWE-821 Incorrect Synchronization
+  cwe_821:
+    question: Does the function synchronise access to a shared resource incorrectly, such as locking only some accesses, using different locks for the same data or releasing the lock too early?
+    message: Synchronisation here does not fully protect the shared resource. Use one lock for every access, held for the whole operation
+    severity: error
+
+  # CWE-822 Untrusted Pointer Dereference
+  cwe_822:
+    question: Does the function turn a value from an untrusted source, such as input, a file or a message, into a pointer or address and dereference it?
+    message: An untrusted value is used as a pointer. Never dereference pointers derived from input; use indexes checked against bounds
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-823 Use of Out-of-range Pointer Offset
+  cwe_823:
+    question: Does the function add an offset to a pointer where the offset, from input or calculation, can move it outside the valid range?
+    message: A pointer offset can move outside valid memory. Check the offset against the buffer bounds first
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-824 Access of Uninitialized Pointer
+  cwe_824:
+    question: Does the function use a pointer or reference that may not have been initialised on every path?
+    message: A pointer may be used before it is initialised. Initialise it, for example to null, and check it before use
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-825 Expired Pointer Dereference
+  cwe_825:
+    question: Does the function use a pointer or reference to memory or an object that may have been freed, closed or gone out of scope, such as after free or after the owner is destroyed?
+    message: A pointer may be used after the memory it points to is released. Set it to null after release, and do not use it afterwards
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-826 Premature Release of Resource During Expected Lifetime
+  cwe_826:
+    question: Does the function release, close or free a resource that is still in use by itself or other code, such as closing a shared connection or freeing memory that is still referenced?
+    message: A resource is released while still in use. Release it only after every user is done, for example with reference counting or ownership
+    severity: error
+
+  # CWE-829 Inclusion of Functionality from Untrusted Control Sphere
+  cwe_829:
+    question: Does the function import, include, load or execute code from a source outside its control, such as a remote URL, user-supplied path or unpinned third-party location?
+    message: Code is loaded from an untrusted source. Load code only from trusted, pinned and verified sources
+    severity: error
+
+  # CWE-832 Unlock of a Resource that is not Locked
+  cwe_832:
+    question: Does the function unlock a lock or release a resource that may not be locked or held by it on the current path?
+    message: A lock may be released when it is not held. Unlock only on paths where it was acquired, for example with a scoped guard
+    severity: error
+
+  # CWE-833 Deadlock
+  cwe_833:
+    question: Does the function acquire two or more locks in an order that could differ from other code, or wait on something while holding a lock, so threads could deadlock?
+    message: Lock ordering here can deadlock. Always take locks in one global order, and do not wait while holding a lock
+    severity: error
+
+  # CWE-835 Loop with Unreachable Exit Condition ('Infinite Loop')
+  cwe_835:
+    question: Does the function contain a loop whose exit condition can never be reached, for example because the loop variable is not updated or the condition cannot become false?
+    message: This loop may never exit. Make sure the exit condition can become true, or add a bound
+    severity: error
+
+  # CWE-836 Use of Password Hash Instead of Password for Authentication
+  cwe_836:
+    question: Does the function authenticate a user by comparing a password hash sent by the client with the stored hash, so the hash itself works as the password?
+    message: The stored hash works as a password. Receive the password over TLS and hash it on the server
+    severity: error
+
+  # CWE-837 Improper Enforcement of a Single, Unique Action
+  cwe_837:
+    question: Does the function allow an action that should happen only once per user, such as voting, redeeming a code or claiming a reward, to be repeated?
+    message: An action meant to happen once can be repeated. Record that it happened and check atomically before allowing it again
+    severity: warning
+
+  # CWE-838 Inappropriate Encoding for Output Context
+  cwe_838:
+    question: Does the function encode output with an encoding that differs from what the receiver expects, such as HTML-escaping data placed in JavaScript, or a different character set than declared?
+    message: Output is encoded for the wrong context. Encode for the exact context and character set the receiver uses
+    severity: warning
+
+  # CWE-839 Numeric Range Comparison Without Minimum Check
+  cwe_839:
+    question: Does the function check that a signed value is at most a maximum without also checking it is at least the minimum, such as zero, before using it as an index or size?
+    message: Only the upper bound is checked, so a negative value gets through. Check the lower bound too
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-841 Improper Enforcement of Behavioral Workflow
+  cwe_841:
+    question: Does the function allow a step of a multi-step workflow, such as checkout, reset or approval, to run without checking the previous steps were completed in order?
+    message: A workflow step can be run out of order or skipped. Check the workflow state before each step
+    severity: error
+
+  # CWE-842 Placement of User into Incorrect Group
+  cwe_842:
+    question: Does the function add a user to a group or role other than the one intended, such as a default admin group or one chosen from the request?
+    message: The user is put in the wrong group. Assign groups from verified server-side policy
+    severity: error
+
+  # CWE-843 Access of Resource Using Incompatible Type ('Type Confusion')
+  cwe_843:
+    question: Does the function access memory or an object as a type different from the one it was created as, for example an unchecked cast, a union read with the wrong member or a downcast without checking?
+    message: An object is accessed as the wrong type. Check the actual type before casting
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-908 Use of Uninitialized Resource
+  cwe_908:
+    question: Does the function use a variable, field, buffer or resource before it has been initialised on every path?
+    message: Something may be used before it is initialised. Initialise it on every path before use
+    severity: error
+
+  # CWE-909 Missing Initialization of Resource
+  cwe_909:
+    question: Does the function create a critical resource, such as a struct, object, buffer or configuration, without initialising all of its fields?
+    message: A critical resource is left partly uninitialised. Initialise every field when creating it
+    severity: warning
+
+  # CWE-910 Use of Expired File Descriptor
+  cwe_910:
+    question: Does the function use a file descriptor or handle after it may have been closed?
+    message: A file descriptor may be used after it is closed. Stop using it after close, and set it to an invalid value
+    severity: error
+
+  # CWE-911 Improper Update of Reference Count
+  cwe_911:
+    question: Does the function increment or decrement a reference count incorrectly, such as missing a decrement on an error path or decrementing twice?
+    message: The reference count can become wrong, leaking or freeing the resource early. Balance each increment with one decrement on every path
+    severity: error
+
+  # CWE-914 Improper Control of Dynamically-Identified Variables
+  cwe_914:
+    question: Does the function read or write variables whose names come from input, for example through extract, globals, setattr, eval or dynamic variable names?
+    message: Input chooses which variables are read or written. Use an explicit map of allowed names
+    severity: error
+
+  # CWE-915 Improperly Controlled Modification of Dynamically-Determined Object Attributes
+  cwe_915:
+    question: Does the function update an object's attributes, fields or properties from a request or other input without restricting which ones can be set?
+    message: Input can set any field on the object, including sensitive ones. Allow only an explicit list of fields
+    severity: error
+
+  # CWE-916 Use of Password Hash With Insufficient Computational Effort
+  cwe_916:
+    question: Does the function hash passwords with a fast or unsalted algorithm, such as plain SHA-256 or MD5, or with too few iterations, instead of a slow password hash?
+    message: Passwords are hashed too cheaply to resist cracking. Use a password hashing function such as Argon2, bcrypt or scrypt
+    severity: error
+
+  # CWE-917 Improper Neutralization of Special Elements used in an Expression Language Statement ('Expression Language Injection')
+  cwe_917:
+    question: Does the function build an expression language, template or OGNL expression from caller or user input and evaluate it?
+    message: Input is evaluated as an expression. Never evaluate expressions built from input; pass it as data
+    severity: error
+    languages:
+      - java
+
+  # CWE-918 Server-Side Request Forgery (SSRF)
+  cwe_918:
+    question: Does the function fetch a URL or connect to a host taken from caller or user input without restricting the destination to allowed hosts?
+    message: The server can be made to request arbitrary URLs, including internal ones. Allow only specific hosts, and block internal addresses
+    severity: error
+
+  # CWE-920 Improper Restriction of Power Consumption
+  cwe_920:
+    question: Does the function run continuous or repeated work, such as polling, busy loops or wake locks, that wastes power on battery-powered or constrained devices?
+    message: This keeps working in a way that drains power. Use events, backoff or sleep instead of polling or busy loops
+    severity: info
+
+  # CWE-921 Storage of Sensitive Data in a Mechanism without Access Control
+  cwe_921:
+    question: Does the function store sensitive data on storage without access control, such as external storage, removable media or shared directories?
+    message: Sensitive data is stored where any app or user can read it. Store it in private storage, or encrypt it
+    severity: warning
+
+  # CWE-924 Improper Enforcement of Message Integrity During Transmission in a Communication Channel
+  cwe_924:
+    question: Does the function receive messages over a channel without verifying they were not modified in transit, for example no TLS, MAC or signature?
+    message: Messages are not protected against tampering in transit. Use TLS, or add a MAC or signature and verify it
+    severity: error
+
+  # CWE-939 Improper Authorization in Handler for Custom URL Scheme
+  cwe_939:
+    question: Does the function handle a custom URL scheme, deep link or intent without checking which app or caller invoked it before acting?
+    message: Any app can invoke this handler. Check the caller, and require confirmation for sensitive actions
+    severity: error
+
+  # CWE-940 Improper Verification of Source of a Communication Channel
+  cwe_940:
+    question: Does the function accept an incoming connection, message or request and act on it without verifying it comes from the expected source?
+    message: The source of the incoming channel is not verified. Authenticate the peer before acting
+    severity: error
+
+  # CWE-941 Incorrectly Specified Destination in a Communication Channel
+  cwe_941:
+    question: Does the function send an outgoing request to a destination that is wrong or not verified, such as a destination from input, a misconfigured address or a host without checking its identity?
+    message: Outgoing requests may go to the wrong destination. Use the configured destination and verify its identity
+    severity: error
+
+  # CWE-1007 Insufficient Visual Distinction of Homoglyphs Presented to User
+  cwe_1007:
+    question: Does the function display identifiers, such as usernames, domains or URLs, without distinguishing visually similar characters from different scripts?
+    message: Look-alike characters can make one identifier pass for another. Normalise the text, and flag mixed scripts or confusable characters
+    severity: info
+
+  # CWE-1021 Improper Restriction of Rendered UI Layers or Frames
+  cwe_1021:
+    question: Does the function serve pages without restricting framing, such as missing X-Frame-Options or frame-ancestors, so other sites could frame them for clickjacking?
+    message: Pages can be framed by other sites. Set frame-ancestors in Content-Security-Policy, or X-Frame-Options
+    severity: warning
+
+  # CWE-1024 Comparison of Incompatible Types
+  cwe_1024:
+    question: Does the function compare values of incompatible types, such as a string with a number, or use loose equality that converts types implicitly?
+    message: Values of different types are compared, which can give wrong results. Convert them to one type first, and use strict equality
+    severity: warning
+
+  # CWE-1025 Comparison Using Wrong Factors
+  cwe_1025:
+    question: Does the function compare the wrong attributes of two things, such as references instead of values, names instead of IDs, or only part of a key?
+    message: The comparison looks at the wrong properties. Compare the attributes that define identity or equality
+    severity: warning
+
+  # CWE-1037 Processor Optimization Removal or Modification of Security-critical Code
+  cwe_1037:
+    question: Does the function rely on execution order or timing for a security-critical check in a way a processor could change through speculative or out-of-order execution, for example a bounds check before an access that uses secret data?
+    message: Speculative execution can bypass this security check. Add a speculation barrier or use a hardened primitive
+    severity: info
+
+  # CWE-1041 Use of Redundant Code
+  cwe_1041:
+    question: Does the function duplicate code that evidently also exists elsewhere, such as a copied block that should be a shared helper?
+    message: This code looks duplicated. Move it into a shared function and call that
+    severity: info
+
+  # CWE-1043 Data Element Aggregating an Excessively Large Number of Non-Primitive Elements
+  cwe_1043:
+    question: Does the function define or build a data structure with an excessively large number of nested non-primitive fields, such as more than five structures or objects?
+    message: This data structure has too many nested non-primitive fields. Split it into smaller, focused structures
+    severity: info
+
+  # CWE-1044 Architecture with Number of Horizontal Layers Outside of Expected Range
+  cwe_1044:
+    question: Does the function reach across many architectural layers at once, such as a user interface handler calling storage, business logic and network layers directly, in a way that suggests too few or too many layers?
+    message: This function spans an unusual number of architectural layers. Arrange calls through a clear, small set of layers
+    severity: info
+
+  # CWE-1045 Parent Class with a Virtual Destructor and a Child Class without a Virtual Destructor
+  cwe_1045:
+    question: Is this a class destructor in a subclass whose parent has a virtual destructor, where the subclass destructor is not virtual or override?
+    message: The child class destructor is not virtual while the parent's is. Mark it virtual or override
+    severity: warning
+    languages:
+      - cpp
+
+  # CWE-1046 Creation of Immutable Text Using String Concatenation
+  cwe_1046:
+    question: Does the function build an immutable string by repeated concatenation in a loop, such as += on a string, instead of using a builder or join?
+    message: Concatenating strings in a loop copies them each time. Collect the parts and join them once, or use a string builder
+    severity: info
+
+  # CWE-1047 Modules with Circular Dependencies
+  cwe_1047:
+    question: Does the function import or call a module that evidently imports this function's own module, creating a circular dependency?
+    message: This creates a circular dependency between modules. Move the shared code into a third module both can depend on
+    severity: info
+
+  # CWE-1048 Invokable Control Element with Large Number of Outward Calls
+  cwe_1048:
+    question: Does the function call an excessively large number of distinct functions or objects outside its own module, for example more than five?
+    message: This function depends on too many outside functions. Split it, or hide the calls behind fewer collaborators
+    severity: info
+
+  # CWE-1049 Excessive Data Query Operations in a Large Data Table
+  cwe_1049:
+    question: Does the function run a query with many joins or subqueries, such as more than five, over large tables?
+    message: This query has many joins or subqueries on large tables. Simplify it, denormalise, or precompute the result
+    severity: info
+
+  # CWE-1050 Excessive Platform Resource Consumption within a Loop
+  cwe_1050:
+    question: Does the function acquire costly platform resources, such as connections, sessions, locks, threads or file handles, inside a loop body or condition?
+    message: Platform resources are acquired in a loop. Acquire them once outside the loop, or reuse a pool
+    severity: warning
+
+  # CWE-1051 Initialization with Hard-Coded Network Resource Configuration Data
+  cwe_1051:
+    question: Does the function initialise data with hard coded network details, such as IP addresses, hostnames, ports or URLs?
+    message: Network locations are hard coded. Read them from configuration
+    severity: warning
+
+  # CWE-1052 Excessive Use of Hard-Coded Literals in Initialization
+  cwe_1052:
+    question: Does the function initialise data with hard coded literals that are not simple integers or named constants, such as long strings, paths or magic numbers?
+    message: Data is initialised with unnamed literals. Replace them with named constants or configuration
+    severity: info
+
+  # CWE-1053 Missing Documentation for Design
+  cwe_1053:
+    question: Is the function complex or architecturally significant yet has no docstring or comment explaining its design or purpose?
+    message: This significant function has no documentation of its design. Add a docstring explaining what it does and why
+    severity: info
+
+  # CWE-1054 Invocation of a Control Element at an Unnecessarily Deep Horizontal Layer
+  cwe_1054:
+    question: Does the function skip an architectural layer, such as a controller or handler calling the database or storage directly instead of going through the service or domain layer?
+    message: This skips a layer by calling a deeper layer directly. Go through the adjacent layer
+    severity: info
+
+  # CWE-1055 Multiple Inheritance from Concrete Classes
+  cwe_1055:
+    question: Does the class or function define a class that inherits from more than one concrete class?
+    message: This class inherits from more than one concrete class. Inherit from one class and compose or use interfaces for the rest
+    severity: info
+
+  # CWE-1056 Invokable Control Element with Variadic Parameters
+  cwe_1056:
+    question: Does the function accept a variable number of arguments, such as *args, varargs or ..., where a fixed signature would be clearer?
+    message: The function takes a variable number of arguments. Use explicit parameters, or a single collection parameter
+    severity: info
+
+  # CWE-1057 Data Access Operations Outside of Expected Data Manager Component
+  cwe_1057:
+    question: Does the function access the database or data store directly, such as with raw queries or connections, when the codebase evidently provides a central data manager, repository or ORM layer for that?
+    message: This bypasses the project's data access layer. Go through the data manager or repository instead
+    severity: warning
+
+  # CWE-1058 Invokable Control Element in Multi-Thread Context with non-Final Static Storable or Member Element
+  cwe_1058:
+    question: Does the function run in a multi-threaded context and modify a non-final static, global or shared member variable without synchronisation?
+    message: Shared mutable static state is modified from multiple threads. Make it immutable, thread local or protected by a lock
+    severity: error
+
+  # CWE-1060 Excessive Number of Inefficient Server-Side Data Accesses
+  cwe_1060:
+    question: Does the function make many separate database queries, such as more than five or one per item in a loop, where a single set-based query would do?
+    message: This makes many separate data queries. Combine them into one query or a batch
+    severity: info
+
+  # CWE-1062 Parent Class with References to Child Class
+  cwe_1062:
+    question: Does the function, in a parent class, refer to a subclass, its methods or its members?
+    message: A parent class depends on its child class. Move the behaviour into the child, or use an overridable method
+    severity: warning
+
+  # CWE-1063 Creation of Class Instance within a Static Code Block
+  cwe_1063:
+    question: Does the function or static initialiser create class instances inside a static block or at import time?
+    message: An instance is created in a static block or at import time. Create it lazily, or pass it in where needed
+    severity: info
+
+  # CWE-1064 Invokable Control Element with Signature Containing an Excessive Number of Parameters
+  cwe_1064:
+    question: Does the function take an excessive number of parameters, such as more than seven?
+    message: The function has too many parameters. Group related parameters into an object, or split the function
+    severity: info
+
+  # CWE-1065 Runtime Resource Management Control Element in a Component Built to Run on Application Servers
+  cwe_1065:
+    question: Does the function manage low-level resources directly, such as threads, sockets or connections, inside a component meant to run on an application server that provides those resources?
+    message: Resources are managed directly instead of through the application server. Use the server's managed resources API
+    severity: warning
+
+  # CWE-1066 Missing Serialization Control Element
+  cwe_1066:
+    question: Is this a serialisable class or data element that lacks an explicit serialisation method or version where one is expected?
+    message: This serialisable type has no serialisation control. Define an explicit serialisation method or version
+    severity: info
+
+  # CWE-1067 Excessive Execution of Sequential Searches of Data Resource
+  cwe_1067:
+    question: Does the function run a query against a table in a way that cannot use an index, such as filtering on an unindexed column, a function of a column or a leading wildcard?
+    message: This query likely scans the whole table. Filter on indexed columns, or add an index
+    severity: info
+
+  # CWE-1068 Inconsistency Between Implementation and Documented Design
+  cwe_1068:
+    question: Does the function's implementation contradict its documented design, such as its docstring, spec reference or design comments?
+    message: The implementation differs from its documented design. Bring the code and documentation back into line
+    severity: warning
+
+  # CWE-1070 Serializable Data Element Containing non-Serializable Item Elements
+  cwe_1070:
+    question: Is this a serialisable class or field that contains members that cannot be serialised, such as locks, sockets, file handles or non-serialisable objects?
+    message: A serialisable type holds members that cannot be serialised. Mark them transient, or replace them with serialisable data
+    severity: warning
+
+  # CWE-1071 Empty Code Block
+  cwe_1071:
+    question: Does the function contain an empty block, such as an empty if, loop, else or exception handler, that suggests missing code?
+    message: This block is empty, which may be unfinished code. Fill it in, or remove it and explain why nothing is needed
+    severity: warning
+
+  # CWE-1072 Data Resource Access without Use of Connection Pooling
+  cwe_1072:
+    question: Does the function open a new database connection for its work instead of using a connection pool?
+    message: A new database connection is opened each time. Use a connection pool
+    severity: info
+
+  # CWE-1073 Non-SQL Invokable Control Element with Excessive Number of Data Resource Accesses
+  cwe_1073:
+    question: Does the function send a large number of separate queries through a data manager or ORM, such as one per record, instead of using efficient set-based database operations?
+    message: This makes many separate data accesses. Use set-based queries, batching or eager loading
+    severity: info
+
+  # CWE-1074 Class with Excessively Deep Inheritance
+  cwe_1074:
+    question: Does the function define a class with a very deep inheritance chain, such as more than seven ancestors?
+    message: The inheritance chain is too deep. Flatten the hierarchy and prefer composition
+    severity: info
+
+  # CWE-1075 Unconditional Control Flow Transfer outside of Switch Block
+  cwe_1075:
+    question: Does the function use an unconditional jump, such as goto, outside a switch or structured error handling block?
+    message: An unconditional jump makes control flow hard to follow. Use structured control flow instead
+    severity: warning
+
+  # CWE-1079 Parent Class without Virtual Destructor Method
+  cwe_1079:
+    question: Does the function define a base class with subclasses, or intended for subclassing, whose destructor is not virtual?
+    message: The base class destructor is not virtual, so deleting through a base pointer skips the child's destructor. Make it virtual
+    severity: warning
+    languages:
+      - cpp
+
+  # CWE-1080 Source Code File with Excessive Number of Lines of Code
+  cwe_1080:
+    question: Is the function part of a source file that is evidently very long, for example with line numbers or references suggesting more than 1000 lines?
+    message: The source file is very long. Split it into smaller, focused modules
+    severity: info
+
+  # CWE-1082 Class Instance Self Destruction Control Element
+  cwe_1082:
+    question: Does the function make an object destroy itself, such as delete this?
+    message: The object deletes itself, which is easy to misuse. Let its owner manage its lifetime
+    severity: warning
+    languages:
+      - cpp
+
+  # CWE-1083 Data Access from Outside Expected Data Manager Component
+  cwe_1083:
+    question: Does the function read or write data through an ad hoc mechanism, such as files, raw sockets or direct SQL, when the codebase has a designated data manager component for that data?
+    message: Data is accessed outside the designated data manager. Use the data manager component
+    severity: warning
+
+  # CWE-1084 Invokable Control Element with Excessive File or Data Access Operations
+  cwe_1084:
+    question: Does the function perform many file or data store operations, such as more than seven reads, writes or queries?
+    message: This function does many data or file operations. Split it, or batch the operations
+    severity: info
+
+  # CWE-1085 Invokable Control Element with Excessive Volume of Commented-out Code
+  cwe_1085:
+    question: Does the function contain a large amount of commented-out code?
+    message: The function contains a lot of commented-out code. Delete it; version control keeps the history
+    severity: info
+
+  # CWE-1086 Class with Excessive Number of Child Classes
+  cwe_1086:
+    question: Does the function define a base class evidently meant to have a very large number of direct subclasses, such as more than ten?
+    message: This class has too many direct subclasses. Reorganise the hierarchy or use composition
+    severity: info
+
+  # CWE-1087 Class with Virtual Method without a Virtual Destructor
+  cwe_1087:
+    question: Does the function define a class with virtual methods but no virtual destructor?
+    message: The class has virtual methods but no virtual destructor. Add a virtual destructor
+    severity: warning
+    languages:
+      - cpp
+
+  # CWE-1089 Large Data Table with Excessive Number of Indices
+  cwe_1089:
+    question: Does the function create or define a large table with an excessive number of indexes, such as more than three?
+    message: This large table has too many indexes, slowing writes. Keep only the indexes queries use
+    severity: info
+
+  # CWE-1090 Method Containing Access of a Member Element from Another Class
+  cwe_1090:
+    question: Does the function directly access the fields or members of another class's objects instead of calling its methods?
+    message: This reaches into another class's fields. Call a method on that class instead
+    severity: info
+
+  # CWE-1092 Use of Same Invokable Control Element in Multiple Architectural Layers
+  cwe_1092:
+    question: Does the function evidently get used from several architectural layers, such as both the UI and the storage layer, while not being a general utility?
+    message: The same function is used across several layers. Give each layer its own entry point, or move it into a utility module
+    severity: info
+
+  # CWE-1094 Excessive Index Range Scan for a Data Resource
+  cwe_1094:
+    question: Does the function query a large table with an index range scan that could cover a very large number of rows, such as an unbounded date or ID range?
+    message: This query can scan a huge range of rows. Narrow the range, paginate or add a more selective filter
+    severity: info
+
+  # CWE-1095 Loop Condition Value Update within the Loop
+  cwe_1095:
+    question: Does the function have a loop whose condition depends on a value that the loop body also modifies, such as changing the counter of a for loop inside the body or modifying the collection being iterated?
+    message: The loop body changes the value its condition depends on. Update the loop control in one place only
+    severity: warning
+
+  # CWE-1097 Persistent Storable Data Element without Associated Comparison Control Element
+  cwe_1097:
+    question: Is this a type stored persistently or used as a key, such as an entity or record, that lacks the equality, hashing or comparison methods needed to compare instances correctly?
+    message: This stored type cannot be compared correctly. Define equality, and hashing or ordering where needed
+    severity: info
+
+  # CWE-1098 Data Element containing Pointer Item without Proper Copy Control Element
+  cwe_1098:
+    question: Does the function define a type that holds a raw pointer or owned resource without defining how it is copied, such as a copy constructor or assignment, so copies share or double free the resource?
+    message: Copies of this type share the pointer it owns. Define copy and assignment, delete them, or use a smart pointer
+    severity: warning
+    languages:
+      - cpp
+
+  # CWE-1099 Inconsistent Naming Conventions for Identifiers
+  cwe_1099:
+    question: Does the function use naming conventions inconsistent with each other or with the surrounding code, such as mixing camelCase and snake_case or different names for the same concept?
+    message: Names here do not follow a consistent convention. Use one convention and one name per concept
+    severity: info
+
+  # CWE-1100 Insufficient Isolation of System-Dependent Functions
+  cwe_1100:
+    question: Does the function mix system-dependent calls, such as operating system or platform specific APIs, directly into general logic instead of isolating them in a separate module?
+    message: System-dependent code is mixed into general logic. Move it behind a small platform module
+    severity: info
+
+  # CWE-1101 Reliance on Runtime Component in Generated Code
+  cwe_1101:
+    question: Does the function rely on generated code that needs a specific runtime component or generator library to run?
+    message: This depends on generated code that needs a special runtime. Document and pin the runtime, or generate code without that dependency
+    severity: info
+
+  # CWE-1102 Reliance on Machine-Dependent Data Representation
+  cwe_1102:
+    question: Does the function depend on machine-specific data representation, such as byte order, word size, struct padding or the size of int or long?
+    message: This depends on how a particular machine represents data. Use fixed-size types and explicit byte order
+    severity: warning
+
+  # CWE-1103 Use of Platform-Dependent Third Party Components
+  cwe_1103:
+    question: Does the function rely on a third-party component or API that only works on some of the platforms the code targets?
+    message: A third-party component used here is not available on every target platform. Choose a portable component, or provide a fallback
+    severity: info
+
+  # CWE-1104 Use of Unmaintained Third Party Components
+  cwe_1104:
+    question: Does the function use a third-party library or API that is evidently unmaintained, deprecated or abandoned?
+    message: This relies on an unmaintained third-party component. Replace it with a maintained alternative
+    severity: warning
+
+  # CWE-1105 Insufficient Encapsulation of Machine-Dependent Functionality
+  cwe_1105:
+    question: Does the function use machine-dependent functionality, such as inline assembly, intrinsics or hardware registers, without encapsulating it behind an abstraction?
+    message: Machine-dependent code is not encapsulated. Put it behind a small interface
+    severity: info
+
+  # CWE-1106 Insufficient Use of Symbolic Constants
+  cwe_1106:
+    question: Does the function use literal values that may change over time, such as limits, rates, sizes or thresholds, instead of named constants?
+    message: Literal values that may change are scattered in the code. Define named constants for them
+    severity: info
+
+  # CWE-1107 Insufficient Isolation of Symbolic Constant Definitions
+  cwe_1107:
+    question: Does the function define symbolic constants locally that evidently belong in a central place, or define the same constant differently from elsewhere?
+    message: Constants are defined locally instead of in one place. Move them into a shared constants module
+    severity: info
+
+  # CWE-1108 Excessive Reliance on Global Variables
+  cwe_1108:
+    question: Does the function read or write global variables heavily instead of passing state through parameters and return values?
+    message: The function relies on global variables. Pass state through parameters and return values
+    severity: warning
+
+  # CWE-1109 Use of Same Variable for Multiple Purposes
+  cwe_1109:
+    question: Does the function reuse one variable for more than one purpose, such as holding a count and later an unrelated value?
+    message: One variable is used for several purposes. Use a separate, well named variable for each
+    severity: warning
+
+  # CWE-1110 Incomplete Design Documentation
+  cwe_1110:
+    question: Is the function complex, concurrent or part of initialisation, without documentation of its control flow, data flow or relationships to other components?
+    message: Important design aspects of this code are undocumented. Document its control flow, data flow and relationships
+    severity: info
+
+  # CWE-1111 Incomplete I/O Documentation
+  cwe_1111:
+    question: Does the function define an interface, such as a public API, CLI or endpoint, without documenting its inputs, outputs and errors?
+    message: This interface does not document its inputs, outputs or errors. Document each of them
+    severity: info
+
+  # CWE-1112 Incomplete Documentation of Program Execution
+  cwe_1112:
+    question: Does the function read environment variables, configuration keys, command-line options or registry keys that change how the program runs, without documenting them?
+    message: Settings that control execution are undocumented. Document each environment variable, option and key
+    severity: info
+
+  # CWE-1113 Inappropriate Comment Style
+  cwe_1113:
+    question: Does the function use comment styles or formats inconsistent with the rest of the codebase or the language's standard docstring style?
+    message: Comments here do not follow the project's style. Use the standard comment and docstring format
+    severity: info
+
+  # CWE-1114 Inappropriate Whitespace Style
+  cwe_1114:
+    question: Does the function use inconsistent whitespace or indentation, such as mixed tabs and spaces or irregular indentation?
+    message: Whitespace is inconsistent. Run the project formatter
+    severity: info
+
+  # CWE-1115 Source Code Element without Standard Prologue
+  cwe_1115:
+    question: Does the source element lack the standard header or prologue the project uses, such as a licence or copyright notice or module description?
+    message: The standard header or prologue is missing. Add the project's standard header
+    severity: info
+
+  # CWE-1116 Inaccurate Source Code Comments
+  cwe_1116:
+    question: Does the function contain comments that do not accurately describe the code next to them?
+    message: A comment does not match the code. Correct the comment, or the code if the comment is right
+    severity: warning
+
+  # CWE-1117 Callable with Insufficient Behavioral Summary
+  cwe_1117:
+    question: Does the function lack documentation of its inputs, outputs, side effects, assumptions or error returns, where these are not obvious from its signature?
+    message: The function's behaviour is not summarised. Document its inputs, outputs, side effects and errors
+    severity: info
+
+  # CWE-1118 Insufficient Documentation of Error Handling Techniques
+  cwe_1118:
+    question: Does the function use an error handling technique, such as special return codes, error callbacks or custom exceptions, without documenting it?
+    message: How this code reports errors is undocumented. Document the errors it raises or returns and what they mean
+    severity: info
+
+  # CWE-1119 Excessive Use of Unconditional Branching
+  cwe_1119:
+    question: Does the function use many unconditional branches, such as goto, or deeply scattered break and continue statements?
+    message: Too many unconditional jumps make control flow hard to follow. Restructure with loops, functions and early returns
+    severity: warning
+
+  # CWE-1121 Excessive McCabe Cyclomatic Complexity
+  cwe_1121:
+    question: Does the function have high cyclomatic complexity, with many branches, loops and conditions, such as more than ten decision points?
+    message: The function has too many branches to follow. Split it into smaller functions
+    severity: warning
+
+  # CWE-1122 Excessive Halstead Complexity
+  cwe_1122:
+    question: Is the function dense with many distinct operators and operands, making it hard to read, for example long expressions with many variables?
+    message: The function is dense with operators and operands. Break long expressions into named steps
+    severity: info
+
+  # CWE-1123 Excessive Use of Self-Modifying Code
+  cwe_1123:
+    question: Does the function modify its own code or other code at runtime, such as monkey patching, rewriting functions or writing executable memory?
+    message: Code is modified at runtime, which makes behaviour hard to predict. Use explicit configuration or dependency injection instead
+    severity: warning
+
+  # CWE-1124 Excessively Deep Nesting
+  cwe_1124:
+    question: Does the function nest conditionals or loops more deeply than about five levels?
+    message: Nesting is too deep to follow. Use early returns or extract inner blocks into functions
+    severity: warning
+
+  # CWE-1125 Excessive Attack Surface
+  cwe_1125:
+    question: Does the function add many externally reachable entry points, parameters or outputs, beyond what its purpose needs?
+    message: This exposes more entry points than needed. Remove or restrict the unnecessary ones
+    severity: info
+
+  # CWE-1126 Declaration of Variable with Unnecessarily Wide Scope
+  cwe_1126:
+    question: Does the function declare a variable in a wider scope than where it is used, such as at the top of the function when only one branch uses it?
+    message: A variable is declared in a wider scope than needed. Declare it where it is used
+    severity: info
+
+  # CWE-1127 Compilation with Insufficient Warnings or Errors
+  cwe_1127:
+    question: Do these build files compile the code without enabling the compiler's warnings at a strict level, or without treating warnings as errors?
+    message: The build does not enable strict compiler warnings. Turn on all warnings at the strictest level and treat them as errors
+    severity: warning
+    scope: project
+    files:
+      - pyproject.toml
+      - setup.cfg
+      - tox.ini
+      - ruff.toml
+      - .ruff.toml
+      - mypy.ini
+      - .mypy.ini
+      - pyrightconfig.json
+      - package.json
+      - tsconfig.json
+      - tsconfig.*.json
+      - eslint.config.*
+      - .eslintrc*
+      - biome.json
+      - biome.jsonc
+      - Cargo.toml
+      - clippy.toml
+      - .clippy.toml
+      - .cargo/config.toml
+      - go.mod
+      - .golangci.y*ml
+      - .golangci.toml
+      - staticcheck.conf
+      - CMakeLists.txt
+      - Makefile
+      - meson.build
+      - .clang-tidy
+      - build.gradle
+      - build.gradle.kts
+      - pom.xml
+      - .rubocop.yml
+      - .luacheckrc
+      - .pre-commit-config.yaml
+      - .github/workflows/*.y*ml
+      - .gitlab-ci.yml
+      - .circleci/config.yml
+      - Justfile
+      - justfile
+      - Taskfile.y*ml
+      - noxfile.py
+
+  # CWE-1173 Improper Use of Validation Framework
+  cwe_1173:
+    question: Does the function validate input by hand, or bypass or misuse the validation framework the codebase uses, such as disabling validation or validating only some fields?
+    message: Input validation bypasses or misuses the validation framework. Validate through the framework for every field
+    severity: warning
+
+  # CWE-1188 Initialization of a Resource with an Insecure Default
+  cwe_1188:
+    question: Does the function initialise a resource with an insecure default intended to be changed later, such as a default password, open permissions, disabled authentication or debug mode on?
+    message: A resource starts with an insecure default. Default to the secure setting, and require an explicit change to relax it
+    severity: error
+
+  # CWE-1204 Generation of Weak Initialization Vector (IV)
+  cwe_1204:
+    question: Does the function generate an initialisation vector for encryption that is fixed, zero, reused or predictable, such as derived from a counter or the key?
+    message: The initialisation vector is weak. Generate a fresh random IV for every encryption
+    severity: error
+
+  # CWE-1220 Insufficient Granularity of Access Control
+  cwe_1220:
+    question: Does the function apply access control too coarsely, such as one permission covering reads and writes or all records, where finer control is needed?
+    message: Access control is too coarse. Check permission for each specific action and resource
+    severity: warning
+
+  # CWE-1230 Exposure of Sensitive Information Through Metadata
+  cwe_1230:
+    question: Does the function protect a sensitive resource but expose metadata derived from it, such as file sizes, timestamps, counts, names or search results?
+    message: Metadata reveals information about a protected resource. Apply the same access control to its metadata
+    severity: warning
+
+  # CWE-1235 Incorrect Use of Autoboxing and Unboxing for Performance Critical Operations
+  cwe_1235:
+    question: Does the function use boxed numbers, such as Integer or Double, in a performance-critical loop or collection where primitives would do?
+    message: Boxing in hot code is slow. Use primitive types or primitive collections
+    severity: info
+    languages:
+      - csharp
+      - java
+
+  # CWE-1236 Improper Neutralization of Formula Elements in a CSV File
+  cwe_1236:
+    question: Does the function write caller or user input into a CSV file without neutralising values starting with =, +, - or @ that a spreadsheet would run as a formula?
+    message: Values in this CSV can run as spreadsheet formulas. Prefix values that start with =, +, - or @ with a single quote
+    severity: warning
+
+  # CWE-1240 Use of a Cryptographic Primitive with a Risky Implementation
+  cwe_1240:
+    question: Does the function implement its own cryptographic algorithm, or use a non-standard, unproven or disallowed implementation?
+    message: Cryptography is hand-rolled or non-standard. Use a vetted, standard cryptographic library
+    severity: error
+
+  # CWE-1241 Use of Predictable Algorithm in Random Number Generator
+  cwe_1241:
+    question: Does the function generate random numbers with a predictable algorithm, such as a linear congruential generator or LFSR, where unpredictability is needed?
+    message: The random number algorithm is predictable. Use a cryptographically secure random generator
+    severity: error
+
+  # CWE-1265 Unintended Reentrant Invocation of Non-reentrant Code Via Nested Calls
+  cwe_1265:
+    question: Does the function call code that may, directly or through callbacks, call back into a non-reentrant function or object while it is already in progress?
+    message: A nested call can re-enter code that is not reentrant. Guard against reentry, or defer the callback
+    severity: warning
+
+  # CWE-1284 Improper Validation of Specified Quantity in Input
+  cwe_1284:
+    question: Does the function take a quantity from input, such as a size, length or count, without checking it is within the allowed range before using it?
+    message: A quantity from input is not range checked. Check it is within the allowed minimum and maximum
+    severity: error
+
+  # CWE-1285 Improper Validation of Specified Index, Position, or Offset in Input
+  cwe_1285:
+    question: Does the function take an index, position or offset from input without checking it is within the bounds of the resource it indexes?
+    message: An index or offset from input is not checked against bounds. Check it is at least zero and less than the size
+    severity: error
+
+  # CWE-1286 Improper Validation of Syntactic Correctness of Input
+  cwe_1286:
+    question: Does the function accept input that should follow a syntax, such as an email, date, URL or structured format, without checking it is well formed?
+    message: Input is not checked for well-formed syntax. Parse it strictly and reject malformed values
+    severity: warning
+
+  # CWE-1287 Improper Validation of Specified Type of Input
+  cwe_1287:
+    question: Does the function accept input that should be a specific type without checking that type, for example trusting that a JSON field is a number or array?
+    message: The input's type is not checked. Check or parse it into the expected type and reject anything else
+    severity: warning
+
+  # CWE-1288 Improper Validation of Consistency within Input
+  cwe_1288:
+    question: Does the function accept input with several fields that must be consistent with each other, such as a length and its data, or a start before an end, without checking that they are?
+    message: Related fields in input are not checked for consistency. Check they agree before using them
+    severity: warning
+
+  # CWE-1289 Improper Validation of Unsafe Equivalence in Input
+  cwe_1289:
+    question: Does the function accept an identifier or reference from input without rejecting values equivalent to unsafe ones, such as encoded .., alternate IP forms or localhost aliases?
+    message: Input equivalent to an unsafe value is not rejected. Normalise it, then check it against the unsafe values
+    severity: error
+
+  # CWE-1322 Use of Blocking Code in Single-threaded, Non-blocking Context
+  cwe_1322:
+    question: Does the function perform blocking operations, such as synchronous I/O, sleep or CPU-heavy work, inside async code or an event loop?
+    message: Blocking work inside async code stalls the event loop. Use the async API, or run it in a thread or process pool
+    severity: error
+
+  # CWE-1327 Binding to an Unrestricted IP Address
+  cwe_1327:
+    question: Does the function bind a server or service to 0.0.0.0 or all interfaces where only local or specific access is intended?
+    message: The service listens on every interface. Bind to localhost or a specific interface unless public access is intended
+    severity: warning
+
+  # CWE-1333 Inefficient Regular Expression Complexity
+  cwe_1333:
+    question: Does the function use a regular expression with nested or overlapping quantifiers, such as (a+)+ or (a|a)*, that could backtrack exponentially on crafted input?
+    message: This regular expression can backtrack catastrophically. Remove nested quantifiers, or use a linear-time regex engine
+    severity: error
+
+  # CWE-1335 Incorrect Bitwise Shift of Integer
+  cwe_1335:
+    question: Does the function shift an integer by an amount that could be negative or at least the number of bits in its type?
+    message: The shift amount can be negative or too large. Check it is between zero and the type's width minus one
+    severity: error
+
+  # CWE-1339 Insufficient Precision or Accuracy of a Real Number
+  cwe_1339:
+    question: Does the function use floating point for values that need exact precision, such as money, or in a way that loses required accuracy?
+    message: Floating point loses the precision this value needs. Use a decimal type or integers in the smallest unit
+    severity: error
+
+  # CWE-1341 Multiple Releases of Same Resource or Handle
+  cwe_1341:
+    question: Does the function close, free or release the same resource or handle more than once without reopening it in between?
+    message: A resource can be released twice. Release it once, and clear the handle afterwards
+    severity: error
+
+  # CWE-1389 Incorrect Parsing of Numbers with Different Radices
+  cwe_1389:
+    question: Does the function parse numeric input without accounting for other bases, such as a leading 0 treated as octal or 0x as hexadecimal?
+    message: Numbers may be parsed in an unexpected base. Specify the base explicitly when parsing
+    severity: warning
+
+  # CWE-1392 Use of Default Credentials
+  cwe_1392:
+    question: Does the function use default credentials, such as admin/admin, a vendor default password or a default key, for critical functionality?
+    message: Default credentials are used. Require unique credentials to be set before use
+    severity: error
+
+  # CWE-23 Relative Path Traversal
+  cwe_23:
+    question: Does the function join caller or user input onto a base directory without rejecting or neutralising .. sequences that could climb out of it?
+    message: Relative path sequences in input can escape the directory. Resolve the path and check it is still inside the base directory
+    severity: error
+
+  # CWE-36 Absolute Path Traversal
+  cwe_36:
+    question: Does the function join caller or user input onto a base directory where an absolute path in the input would replace the base, such as os.path.join or Path / with an input starting with /?
+    message: An absolute path in input overrides the base directory. Reject absolute paths, and check the resolved path is inside the base
+    severity: error
+
+  # CWE-77 Improper Neutralization of Special Elements used in a Command ('Command Injection')
+  cwe_77:
+    question: Does the function build a command for an interpreter, shell or other command processor from caller or user input without neutralising special characters?
+    message: Input is written into a command without neutralising it. Pass input as separate arguments, or escape it for that command language
+    severity: error
+
+  # CWE-99 Improper Control of Resource Identifiers ('Resource Injection')
+  cwe_99:
+    question: Does the function use caller or user input as the identifier of a resource, such as a file, port, socket, table or queue, without restricting it to allowed values?
+    message: Input chooses which resource is used. Map it to an allow list of resources
+    severity: error
+
+  # CWE-119 Improper Restriction of Operations within the Bounds of a Memory Buffer
+  cwe_119:
+    question: Does the function read or write memory through buffers, arrays or pointers without ensuring every access stays within the buffer's bounds?
+    message: A memory access can go outside the buffer. Check indexes and lengths against the buffer size
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-123 Write-what-where Condition
+  cwe_123:
+    question: Does the function write an attacker-influenced value to an attacker-influenced address, for example through an unchecked index into a pointer array or a corrupted pointer?
+    message: Input can control both what is written and where. Validate indexes and never write through pointers derived from input
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-129 Improper Validation of Array Index
+  cwe_129:
+    question: Does the function use caller or user input, or a value derived from it, as an array index without checking it is at least zero and less than the array length?
+    message: An index from input is not checked. Check it is within the array bounds before use
+    severity: error
+
+  # CWE-194 Unexpected Sign Extension
+  cwe_194:
+    question: Does the function widen a signed value, such as a char or short, into a larger or unsigned type where a negative value would sign extend into a large number?
+    message: A negative value can sign extend into a huge number. Convert through an unsigned type of the same size, or check the sign first
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-195 Signed to Unsigned Conversion Error
+  cwe_195:
+    question: Does the function convert a signed value to an unsigned type, for example as a size or length, where a negative value would become a huge number?
+    message: A negative signed value becomes a huge unsigned one. Check it is not negative before converting
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-196 Unsigned to Signed Conversion Error
+  cwe_196:
+    question: Does the function convert an unsigned value to a signed type where a large value would become negative?
+    message: A large unsigned value becomes negative. Check it fits in the signed type before converting
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-197 Numeric Truncation Error
+  cwe_197:
+    question: Does the function cast a value to a smaller numeric type, losing high-order bits, where the value can exceed the smaller type's range?
+    message: Casting to a smaller type can lose data. Check the value fits before casting
+    severity: error
+
+  # CWE-259 Use of Hard-coded Password
+  cwe_259:
+    question: Does the function contain a hard coded password used to authenticate users or to connect to another system?
+    message: A password is hard coded. Load it from a secret store at runtime, and rotate the exposed one
+    severity: error
+
+  # CWE-321 Use of Hard-coded Cryptographic Key
+  cwe_321:
+    question: Does the function contain a hard coded cryptographic key, secret or signing key?
+    message: A cryptographic key is hard coded. Load it from a key management system or secret store
+    severity: error
+
+  # CWE-401 Missing Release of Memory after Effective Lifetime
+  cwe_401:
+    question: Does the function allocate memory that is not freed on every path once it is no longer needed, for example leaking on an error return?
+    message: Allocated memory can leak. Free it on every path, or use automatic ownership such as RAII or smart pointers
+    severity: error
+
+  # CWE-404 Improper Resource Shutdown or Release
+  cwe_404:
+    question: Does the function fail to shut down or release a resource correctly, such as not closing it, closing it with the wrong call or leaving it half released?
+    message: A resource is not released correctly. Close it with the right call on every path
+    severity: warning
+
+  # CWE-407 Inefficient Algorithmic Complexity
+  cwe_407:
+    question: Does the function use an algorithm whose worst case is quadratic or worse on input size, such as nested loops over input or repeated linear searches, where input can be large?
+    message: The worst-case cost grows badly with input size. Use a more efficient algorithm or data structure, or limit input size
+    severity: warning
+
+  # CWE-415 Double Free
+  cwe_415:
+    question: Does the function free or delete the same memory more than once on some path?
+    message: The same memory can be freed twice. Free it once, and set the pointer to null afterwards
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-416 Use After Free
+  cwe_416:
+    question: Does the function use memory or an object after it has been freed or deleted?
+    message: Memory is used after it is freed. Do not access it after freeing, and clear the pointer
+    severity: error
+    languages:
+      - c
+      - cpp
+
+  # CWE-424 Improper Protection of Alternate Path
+  cwe_424:
+    question: Does the function provide another path to restricted functionality or data, such as a different endpoint, method or parameter, that skips the protections on the main path?
+    message: An alternate path skips the protections on the main one. Apply the same checks to every path
+    severity: error
+
+  # CWE-456 Missing Initialization of a Variable
+  cwe_456:
+    question: Does the function declare a critical variable without initialising it, relying on whatever value it happens to have?
+    message: A critical variable is not initialised. Initialise it when you declare it
+    severity: warning
+
+  # CWE-457 Use of Uninitialized Variable
+  cwe_457:
+    question: Does the function read a variable before it has been assigned on every path?
+    message: A variable can be read before it is assigned. Assign it on every path before reading it
+    severity: error
+
+  # CWE-543 Use of Singleton Pattern Without Synchronization in a Multithreaded Context
+  cwe_543:
+    question: Does the function lazily create a singleton instance in a multi-threaded context without synchronisation?
+    message: Two threads can create the singleton at once. Create it eagerly, or synchronise its creation
+    severity: error
+
+  # CWE-564 SQL Injection: Hibernate
+  cwe_564:
+    question: Does the function build a Hibernate, JPA, ORM or HQL query by concatenating caller or user input into the query string?
+    message: Input is concatenated into an ORM query. Use named or positional parameters
+    severity: error
+
+  # CWE-567 Unsynchronized Access to Shared Data in a Multithreaded Context
+  cwe_567:
+    question: Does the function read or modify shared static or instance data in a multi-threaded context, such as a servlet or request handler, without synchronisation?
+    message: Shared data is accessed from several threads without synchronisation. Synchronise it, or keep the data per request
+    severity: error
+    languages:
+      - java
+
+  # CWE-595 Comparison of Object References Instead of Object Contents
+  cwe_595:
+    question: Does the function compare objects by reference, such as == in Java or is in Python, where their contents should be compared?
+    message: Objects are compared by reference, not content. Compare with equals or ==, as the language requires
+    severity: warning
+
+  # CWE-597 Use of Wrong Operator in String Comparison
+  cwe_597:
+    question: Does the function compare strings with a reference or identity operator, such as == in Java or is in Python, instead of value equality?
+    message: Strings are compared by identity. Compare them by value
+    severity: warning
+
+  # CWE-643 Improper Neutralization of Data within XPath Expressions ('XPath Injection')
+  cwe_643:
+    question: Does the function build an XPath expression by inserting caller or user input as text instead of binding it as a variable?
+    message: Input is written into an XPath expression. Use parameterised XPath with bound variables
+    severity: error
+
+  # CWE-652 Improper Neutralization of Data within XQuery Expressions ('XQuery Injection')
+  cwe_652:
+    question: Does the function build an XQuery expression by inserting caller or user input as text instead of binding it as an external variable?
+    message: Input is written into an XQuery expression. Bind it as an external variable
+    severity: error
+
+  # CWE-662 Improper Synchronization
+  cwe_662:
+    question: Does the function share a resource that needs exclusive access across threads, processes or services without synchronisation that guarantees one user at a time?
+    message: Exclusive access to a shared resource is not guaranteed. Use a lock, transaction or other synchronisation
+    severity: error
+
+  # CWE-665 Improper Initialization
+  cwe_665:
+    question: Does the function initialise a resource incorrectly or incompletely, such as missing fields, wrong defaults or initialising after first use?
+    message: A resource is not initialised correctly. Initialise it fully with correct values before it is used
+    severity: warning
+
+  # CWE-667 Improper Locking
+  cwe_667:
+    question: Does the function acquire or release a lock incorrectly, such as not releasing it on an error path, releasing the wrong lock or not acquiring it before use?
+    message: Lock handling is incorrect. Acquire before use and release on every path, for example with a scoped guard
+    severity: error
+
+  # CWE-672 Operation on a Resource after Expiration or Release
+  cwe_672:
+    question: Does the function use a resource after it has expired, been released, closed or revoked, such as a closed connection, expired token or freed object?
+    message: A resource is used after it expired or was released. Check it is still valid, or obtain a fresh one
+    severity: error
+
+  # CWE-682 Incorrect Calculation
+  cwe_682:
+    question: Does the function perform a calculation that gives a wrong result for its evident purpose, such as the wrong formula, wrong operand or wrong rounding?
+    message: This calculation gives the wrong result. Check the formula and test it with known values
+    severity: error
+
+  # CWE-703 Improper Check or Handling of Exceptional Conditions
+  cwe_703:
+    question: Does the function fail to anticipate or handle rare exceptional conditions, such as empty input, missing files, network failure or full disks?
+    message: Rare failure conditions are not handled. Handle them explicitly, or fail with a clear error
+    severity: warning
+
+  # CWE-704 Incorrect Type Conversion or Cast
+  cwe_704:
+    question: Does the function convert or cast a value or object to another type incorrectly, such as an unchecked downcast or converting between incompatible representations?
+    message: A type conversion here is incorrect. Check the type or range before converting
+    severity: error
+
+  # CWE-732 Incorrect Permission Assignment for Critical Resource
+  cwe_732:
+    question: Does the function set permissions on a security-critical resource, such as a key, config file, socket or directory, that let unintended users read or modify it?
+    message: A critical resource gets permissions that are too broad. Restrict it to the owner or required group
+    severity: error
+
+  # CWE-758 Reliance on Undefined, Unspecified, or Implementation-Defined Behavior
+  cwe_758:
+    question: Does the function rely on behaviour that is undefined, unspecified or implementation-defined, such as dict ordering in old runtimes, evaluation order, signed overflow or uninitialised memory?
+    message: The code relies on behaviour that is not guaranteed. Rewrite it to depend only on specified behaviour
+    severity: warning
+
+  # CWE-775 Missing Release of File Descriptor or Handle after Effective Lifetime
+  cwe_775:
+    question: Does the function open a file, socket or handle and not close it on every path once it is no longer needed?
+    message: A file or handle is not closed on every path. Use with, try-with-resources, defer or RAII
+    severity: warning
+
+  # CWE-789 Memory Allocation with Excessive Size Value
+  cwe_789:
+    question: Does the function allocate memory with a size from input or computed from input without capping it?
+    message: Memory is allocated with a size from input. Check the size against a maximum first
+    severity: error
+
+  # CWE-1042 Static Member Data Element outside of a Singleton Class Element
+  cwe_1042:
+    question: Does the function define or modify a static, non-final member in a class that is not a singleton?
+    message: A mutable static member makes instances share state. Make it an instance member, or make it constant
+    severity: warning
+
+  # CWE-1077 Floating Point Comparison with Incorrect Operator
+  cwe_1077:
+    question: Does the function compare floating point values for exact equality or inequality, such as == or !=, where rounding errors matter?
+    message: Floating point values are compared exactly. Compare with a tolerance, or use exact types
+    severity: warning
+
+  # CWE-1088 Synchronous Access of Remote Resource without Timeout
+  cwe_1088:
+    question: Does the function make a synchronous call to a remote resource, such as HTTP, database, RPC or socket, with no timeout or an infinite one?
+    message: A remote call has no timeout and can hang forever. Set an explicit timeout
+    severity: warning
+
+  # CWE-1091 Use of Object without Invoking Destructor Method
+  cwe_1091:
+    question: Does the function use an object that needs explicit disposal, such as close or dispose, without calling it afterwards?
+    message: An object is not disposed after use. Call close or dispose, or use a scoped construct
+    severity: warning
+
+  # CWE-1096 Singleton Class Instance Creation without Proper Locking or Synchronization
+  cwe_1096:
+    question: Does the function implement singleton creation without locking or synchronisation, so more than one instance could be created concurrently?
+    message: Singleton creation is not synchronised. Synchronise it, or create the instance eagerly
+    severity: error
+
+  # EXT-BUILD-001 Syntax violation
+  ext_build_001:
+    question: Does the function contain a syntax error for its language, such as a malformed expression, unbalanced brackets or a statement the language version does not allow?
+    message: The code is not valid syntax for its language. Fix the malformed code so it parses
+    severity: error
+
+  # EXT-BUILD-002 Unresolved binding
+  ext_build_002:
+    question: Does the function refer to a name, module, package or symbol that is not defined, imported or available, without a guarded fallback?
+    message: A referenced name or module cannot be resolved. Import or define it, or guard the import with a supported fallback
+    severity: error
+
+  # EXT-BUILD-003 Type incompatibility
+  ext_build_003:
+    question: Does the function pass, return or assign a value whose type contradicts a declared type, such as a string where an integer parameter is declared, without a validated conversion?
+    message: A value breaks the declared type contract. Convert and validate it explicitly, or fix the declared type
+    severity: error
+
+  # EXT-BUILD-004 Unreproducible build input
+  ext_build_004:
+    question: Do these build files let the build depend on inputs that are not pinned or declared, such as unpinned dependency versions, floating image tags, fetched files without checksums or the current time?
+    message: The build depends on undeclared or unpinned inputs, so identical sources can produce different artifacts. Pin every input by version or checksum
+    severity: warning
+    scope: project
+    files:
+      - pyproject.toml
+      - setup.cfg
+      - tox.ini
+      - ruff.toml
+      - .ruff.toml
+      - mypy.ini
+      - .mypy.ini
+      - pyrightconfig.json
+      - package.json
+      - tsconfig.json
+      - tsconfig.*.json
+      - eslint.config.*
+      - .eslintrc*
+      - biome.json
+      - biome.jsonc
+      - Cargo.toml
+      - clippy.toml
+      - .clippy.toml
+      - .cargo/config.toml
+      - go.mod
+      - .golangci.y*ml
+      - .golangci.toml
+      - staticcheck.conf
+      - CMakeLists.txt
+      - Makefile
+      - meson.build
+      - .clang-tidy
+      - build.gradle
+      - build.gradle.kts
+      - pom.xml
+      - .rubocop.yml
+      - .luacheckrc
+      - .pre-commit-config.yaml
+      - .github/workflows/*.y*ml
+      - .gitlab-ci.yml
+      - .circleci/config.yml
+      - Justfile
+      - justfile
+      - Taskfile.y*ml
+      - noxfile.py
+
+  # EXT-DOMAIN-001 Missing required behaviour
+  ext_domain_001:
+    question: Does the function evidently omit a case its docstring, name or surrounding requirements say it must handle, such as a documented status, input kind or eligibility rule with no code path?
+    message: A required case has no code path. Implement it, or document that the requirement excludes it
+    severity: warning
+
+  # EXT-DOMAIN-002 Incorrect business calculation
+  ext_domain_002:
+    question: Does the function compute a business value, such as a price, tax, interest, fee or total, with a formula, rate, rounding or date rule that contradicts the domain rule it evidently implements?
+    message: This business calculation disagrees with the domain rule it implements. Check it against reference calculations for the agreed formula
+    severity: error
+
+  # EXT-DOMAIN-003 Invalid domain transition
+  ext_domain_003:
+    question: Does the function change the state of a domain entity, such as an order, payment or account, to a state that its prior state should not allow, such as shipping a cancelled order, without checking the transition is valid?
+    message: A state change is allowed that the business state machine forbids. Check the current state permits the transition before changing it
+    severity: error
+
+  # EXT-DOMAIN-004 Unit or dimension mismatch
+  ext_domain_004:
+    question: Does the function combine, compare or assign values with different units or dimensions, such as milliseconds and seconds, metres and feet or cents and dollars, without converting?
+    message: Values in different units are combined without converting. Convert to one unit, and name variables with their unit
+    severity: error
+
+  # EXT-DISTRIBUTED-001 Non-idempotent replay
+  ext_distributed_001:
+    question: Does the function perform a side effect that must happen once, such as charging, sending or creating a record, in a way that a retry, redelivered message or repeated request would repeat, with no idempotency key or deduplication?
+    message: A retry or duplicate delivery repeats a side effect that must happen once. Deduplicate with a stable request identity or idempotency key
+    severity: error
+
+  # EXT-DISTRIBUTED-002 Incompatible consistency assumption
+  ext_distributed_002:
+    question: Does the function assume stronger consistency than its storage or messaging provides, such as reading from a replica or cache right after a write and expecting to see it, or relying on message order that is not guaranteed?
+    message: The code assumes consistency or ordering the storage does not guarantee. Read from a source that provides the guarantee, or handle stale and reordered data
+    severity: error
+
+  # EXT-DISTRIBUTED-003 Incomplete multi-system commit
+  ext_distributed_003:
+    question: Does the function write to more than one system, such as a database and a queue, payment provider or another service, so a failure between writes leaves them inconsistent with no transaction, outbox, saga or compensation?
+    message: A failure between writes to different systems leaves them inconsistent. Use an outbox, saga or compensating action so the workflow completes or is undone
+    severity: error
+
+  # EXT-DISTRIBUTED-004 Invalid lease ownership
+  ext_distributed_004:
+    question: Does the function perform exclusive work under a lease or distributed lock without checking the lease is still held, or without a fencing token, so a paused or slow worker could continue after losing it?
+    message: Work can continue after the lease is lost. Check the lease before each write, and have storage reject writes with stale fencing tokens
+    severity: error
+
+  # EXT-DELIVERY-001 Incompatible rolling upgrade
+  ext_delivery_001:
+    question: Does the function change a data format, message, schema or API call in a way that old and new versions running side by side during a deployment could not both handle?
+    message: Old and new versions cannot both handle this change during rollout. Use an expand and contract change that supports both versions
+    severity: warning
+
+  # EXT-DELIVERY-002 Unsafe data migration
+  ext_delivery_002:
+    question: Is this a data migration or backfill that could drop, corrupt or lock existing data, for example by skipping records that fail to convert, lacking a rollback or not reconciling counts?
+    message: This migration can lose or corrupt existing data. Reconcile record counts and totals, handle every record, and provide a rollback
+    severity: error
+
+  # EXT-DELIVERY-003 Configuration contract violation
+  ext_delivery_003:
+    question: Do these configuration files contain settings that contradict each other or their schema, such as a production endpoint with development credentials, or values of the wrong type or out of range?
+    message: Configuration settings contradict each other or their schema. Validate configuration against a schema, including cross-field rules
+    severity: warning
+    scope: project
+    files:
+      - pyproject.toml
+      - setup.cfg
+      - tox.ini
+      - ruff.toml
+      - .ruff.toml
+      - mypy.ini
+      - .mypy.ini
+      - pyrightconfig.json
+      - package.json
+      - tsconfig.json
+      - tsconfig.*.json
+      - eslint.config.*
+      - .eslintrc*
+      - biome.json
+      - biome.jsonc
+      - Cargo.toml
+      - clippy.toml
+      - .clippy.toml
+      - .cargo/config.toml
+      - go.mod
+      - .golangci.y*ml
+      - .golangci.toml
+      - staticcheck.conf
+      - CMakeLists.txt
+      - Makefile
+      - meson.build
+      - .clang-tidy
+      - build.gradle
+      - build.gradle.kts
+      - pom.xml
+      - .rubocop.yml
+      - .luacheckrc
+      - .pre-commit-config.yaml
+      - .github/workflows/*.y*ml
+      - .gitlab-ci.yml
+      - .circleci/config.yml
+      - Justfile
+      - justfile
+      - Taskfile.y*ml
+      - noxfile.py
+
+  # EXT-DELIVERY-004 Unusable recovery artifact
+  ext_delivery_004:
+    question: Does the function create a backup, snapshot or release artifact that omits something needed to restore it, such as encryption keys, schema, configuration or dependent data?
+    message: The backup or artifact cannot be restored as it is. Include everything the restore procedure needs, and rehearse a restore
+    severity: warning
+
+  # EXT-ARCH-001 Dependency boundary violation
+  ext_arch_001:
+    question: Does the function import or call across an architectural boundary the codebase evidently forbids, such as domain code importing infrastructure, a web framework or a database driver directly?
+    message: This dependency crosses a forbidden architectural boundary. Depend on an interface in the allowed layer instead
+    severity: warning
+
+  # EXT-ARCH-002 Dependency cycle forbidden by policy
+  ext_arch_002:
+    question: Does the function create a dependency from a lower layer back to a higher one, such as a repository calling a controller, forming a cycle between layers?
+    message: This creates a dependency cycle between layers. Invert the dependency with an interface or event
+    severity: warning
+
+  # EXT-ARCH-003 Unsupported platform assumption
+  ext_arch_003:
+    question: Does the function assume platform behaviour that is not true on every target, such as case-sensitive paths, / separators, a particular shell, line endings or locale?
+    message: The code assumes behaviour not available on every target platform. Use portable APIs, or handle each platform
+    severity: warning
+
+  # EXT-ARCH-004 Undeclared breaking interface change
+  ext_arch_004:
+    question: Does the function change a public interface in a breaking way, such as adding a required parameter, removing or renaming a field, or changing a return type, that existing callers would not expect?
+    message: A public interface changes in a breaking way. Add the change compatibly, for example as an optional parameter, or release it as a breaking change
+    severity: warning
+
+  # EXT-VERIFY-001 Incorrect test oracle
+  ext_verify_001:
+    question: Is this a test whose expected value is computed the same way as the implementation, or copied from its output, rather than derived independently from the requirement?
+    message: The expected value comes from the implementation, so the test repeats its mistakes. Derive expected values independently from the requirement
+    severity: error
+
+  # EXT-VERIFY-002 Vacuous check
+  ext_verify_002:
+    question: Does the function contain an assertion, check or test that can never fail, such as asserting on an unreachable path, comparing a value to itself or checking a condition that is always true?
+    message: This check can never fail. Make it check the real property, and confirm a known violation makes it fail
+    severity: error
+
+  # EXT-VERIFY-003 Unrepresentative verification environment
+  ext_verify_003:
+    question: Is this a test that claims to verify behaviour under conditions it does not create, such as concurrency tested on one thread, production data tested with tiny inputs or a real service replaced by a fake that behaves differently?
+    message: The test's conditions do not match the claim it makes. Recreate the conditions it claims to verify, or narrow the claim
+    severity: warning
+
+  # EXT-VERIFY-004 Unenforced required gate
+  ext_verify_004:
+    question: Do these CI or build files let a required check fail without blocking the release or merge it guards, such as continue-on-error, allow_failure, || true or a deploy that does not depend on the test job?
+    message: A required check does not block the action it guards. Make the release or merge depend on the check passing
+    severity: warning
+    scope: project
+    files:
+      - pyproject.toml
+      - setup.cfg
+      - tox.ini
+      - ruff.toml
+      - .ruff.toml
+      - mypy.ini
+      - .mypy.ini
+      - pyrightconfig.json
+      - package.json
+      - tsconfig.json
+      - tsconfig.*.json
+      - eslint.config.*
+      - .eslintrc*
+      - biome.json
+      - biome.jsonc
+      - Cargo.toml
+      - clippy.toml
+      - .clippy.toml
+      - .cargo/config.toml
+      - go.mod
+      - .golangci.y*ml
+      - .golangci.toml
+      - staticcheck.conf
+      - CMakeLists.txt
+      - Makefile
+      - meson.build
+      - .clang-tidy
+      - build.gradle
+      - build.gradle.kts
+      - pom.xml
+      - .rubocop.yml
+      - .luacheckrc
+      - .pre-commit-config.yaml
+      - .github/workflows/*.y*ml
+      - .gitlab-ci.yml
+      - .circleci/config.yml
+      - Justfile
+      - justfile
+      - Taskfile.y*ml
+      - noxfile.py
+
+  # EXT-OBS-001 Misreported outcome
+  ext_obs_001:
+    question: Does the function record success, such as a success metric, log or status, before the operation has actually completed, or on a path where it failed?
+    message: Success is recorded for an operation that may have failed. Record success only after the operation completes
+    severity: warning
+
+  # EXT-OBS-002 Broken causal correlation
+  ext_obs_002:
+    question: Does the function hand work to another thread, task, queue or service without passing along the trace, correlation or request identifier?
+    message: The correlation identifier is lost at this handoff. Pass the trace or request context along with the work
+    severity: warning
+
+  # EXT-OBS-003 Missing required operational signal
+  ext_obs_003:
+    question: Does the function handle an operational failure, such as a stalled queue, exhausted retries or a dropped message, without emitting any metric, log or alert?
+    message: An operational failure happens silently. Emit a metric, log or alert when it occurs
+    severity: warning
+
+  # EXT-OBS-004 Unbounded telemetry cardinality
+  ext_obs_004:
+    question: Does the function use unbounded values, such as user IDs, request IDs, raw URLs or error messages, as metric labels or tags?
+    message: Unbounded values are used as metric labels, which can explode storage. Use bounded labels, and put identifiers in logs or traces
+    severity: warning
+
+  # EXT-HUMAN-001 Inaccessible required interaction
+  ext_human_001:
+    question: Does the function render user interface elements for a required action that cannot be used with a keyboard or assistive technology, such as clickable divs without roles, missing labels or mouse-only handlers?
+    message: A required interaction is not accessible. Use semantic controls with labels, and support keyboard operation
+    severity: warning
+
+  # EXT-HUMAN-002 Ambiguous destructive interaction
+  ext_human_002:
+    question: Does the function perform a destructive action, such as deleting or overwriting, where the confirmation shown or requested may refer to a different target than the one actually affected, or where no confirmation is required?
+    message: The destructive action may not match what the user confirmed. Confirm the exact target, and act on that same target
+    severity: error
+
+  # EXT-HUMAN-003 Unsafe control interaction
+  ext_human_003:
+    question: Does the function allow a safety-relevant action based on the assumption that another component or controller will block unsafe combinations, with no enforced check of its own?
+    message: Unsafe combinations of actions are not prevented here. Enforce the safety constraint in this code instead of assuming another component will
+    severity: error
+
+  # EXT-HUMAN-004 Unowned operational obligation
+  ext_human_004:
+    question: Do these files describe an operational responsibility, such as recovery, on-call, key rotation or incident response, without naming an owner or giving a procedure to follow?
+    message: An operational responsibility has no owner or procedure. Name an accountable role and write the runbook
+    severity: info
+    scope: project
+    files:
+      - README*
+      - RUNBOOK*
+      - runbook*
+      - docs/runbook*
+      - docs/runbooks/*
+      - SECURITY.md
+      - OWNERS
+      - CODEOWNERS
+      - .github/CODEOWNERS
+      - docs/CODEOWNERS

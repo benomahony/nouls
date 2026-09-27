@@ -61,8 +61,9 @@ def test_cost_counts_cache_hits(client: FakeClient, capsys: pytest.CaptureFixtur
     _ = capsys.readouterr()
     _ = run("stats", "cost", "--price-per-million", "1")
     row = next(line for line in capsys.readouterr().out.splitlines() if "│ 20" in line)
+    tokens = sum(100 * len(call.questions) for call in client.calls)  # FakeClient's usage
     assert "50%" in row
-    assert "$0.0030" in row
+    assert f"${tokens / 1_000_000:.4f}" in row
     assert len(client.calls) == PYTHON_FUNCTIONS + PROJECT_CALLS
 
 

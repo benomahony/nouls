@@ -61,4 +61,5 @@ Write each `message` in plain language, say precisely what is wrong, then sugges
 - Check docs/index.md for comprehensive documentation
 - Check llms.txt for LLM-friendly documentation summary
 - Check src/nouls/defaults.yaml for built in languages and rules
+- Check src/nouls/catalogue.yaml for the engineering error catalogue rules, such as cwe_89
 - Check src/nouls/ for implementation details

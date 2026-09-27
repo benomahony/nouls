@@ -16,6 +16,8 @@ from tests.conftest import APP, PYTHON, PYTHON_FUNCTIONS, FakeClient, as_client
 
 pytestmark = pytest.mark.unit
 
+CATALOGUE_ENTRIES = 475  # 443 CWE entries and 32 engineering extensions
+
 
 async def test_flags_only_the_offending_function(config: Config, store: Store) -> None:
     """Flags only the offending function."""
@@ -41,7 +43,8 @@ async def test_unchanged_functions_are_cached_across_processes(
     )
     assert len(client.calls) == PYTHON_FUNCTIONS + 1
     ((asked, cached),) = reopened.query(tuple[int, int], "SELECT SUM(asked), SUM(cached) FROM runs")
-    assert (asked, cached) == (42, 14)
+    rules = len(config.rules_for("python", APP))
+    assert (asked, cached) == (3 * rules, rules)
 
 
 async def test_rewording_one_rule_only_reasks_that_rule(config: Config, store: Store) -> None:
@@ -220,6 +223,37 @@ def test_desiderata_rules_only_apply_to_test_files(config: Config) -> None:
         language = config.language_for(Path(path))
         assert language is not None
         assert not desiderata & set(config.rules_for(language, Path(path))), path
+
+
+def test_catalogue_rules_are_on_by_default(config: Config) -> None:
+    """Every catalogue entry is a rule, and its general rules are asked about every language."""
+    catalogue = {name for name in config.rules if name.startswith(("cwe_", "ext_"))}
+    assert len(catalogue) == CATALOGUE_ENTRIES
+    assert all(config.rules[name].enabled for name in catalogue)
+    for language, path in [("python", "app.py"), ("go", "main.go"), ("c", "main.c")]:
+        rules = config.rules_for(language, Path(path))
+        assert {"cwe_22", "cwe_89", "ext_distributed_001"} <= set(rules), language
+
+
+def test_memory_safety_rules_are_only_asked_about_c_and_cpp(config: Config) -> None:
+    """Memory safety rules are only asked about C and C++."""
+    memory = {"cwe_120", "cwe_125", "cwe_415", "cwe_416", "cwe_787"}
+    assert memory <= set(config.rules_for("c", Path("buffer.c")))
+    assert memory <= set(config.rules_for("cpp", Path("buffer.cpp")))
+    assert not memory & set(config.rules_for("python", Path("buffer.py")))
+    assert "cwe_1079" not in config.rules_for("c", Path("buffer.c")), "Virtual destructors are C++"
+
+
+def test_project_yaml_turns_off_catalogue_rules(tmp_path: Path) -> None:
+    """A project's nouls.yaml turns off catalogue rules like any other."""
+    _ = (tmp_path / "nouls.yaml").write_text(
+        "rules:\n  cwe_1080:\n    enabled: false\n  cwe_89:\n    severity: warning\n"
+    )
+    config = load_config(tmp_path)
+    rules = config.rules_for("python", Path("app.py"))
+    assert "cwe_1080" not in rules
+    assert rules["cwe_89"].severity == "warning"
+    assert rules["cwe_89"].question.startswith("Does the function build a SQL statement")
 
 
 def test_score_counts_precision_and_recall() -> None:

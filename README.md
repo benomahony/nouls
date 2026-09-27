@@ -62,6 +62,22 @@ The test rules only run on files matching `test_files`, such as `test_*.py`, `co
 
 Every test rule asks about a test case and every fixture rule about a fixture or hook, so each kind of function is judged only by its own rules. Decorators and attributes such as `@pytest.fixture`, `#[fixture]` and `@BeforeEach` are sent along with the function so the model can tell them apart. In test files, calls such as Jest's `it` and `beforeEach`, RSpec's `it`, `let` and `before`, and busted's `it` and `before_each` are also sent as functions.
 
+## Engineering error catalogue
+
+nouls also asks one question for every entry of the engineering error catalogue: 443 weaknesses from the [CWE-699](https://cwe.mitre.org/data/definitions/699.html) and [CWE-1305](https://cwe.mitre.org/data/definitions/1305.html) views of MITRE's Common Weakness Enumeration, and 32 engineering extensions covering build, domain, distributed systems, delivery, architecture, verification, observability and human interaction. Each rule is named after its entry in lower case, such as `cwe_89` for SQL injection or `ext_distributed_001` for a non-idempotent replay, and lives in `src/nouls/catalogue.yaml`.
+
+These rules are on by default, so a function is asked more than 400 questions rather than 14. That costs more tokens the first time each function is checked, but after that only edited functions are asked again. Rules for weaknesses that only exist in C and C++, such as buffer overflows and use after free, are only asked about C and C++. A handful ask about the project's build, CI and operations files instead of about functions.
+
+Catalogue rules merge like the defaults, so reword, retune or turn them off in your nouls config:
+
+```yaml
+rules:
+  cwe_1080:
+    enabled: false
+  cwe_89:
+    threshold: 0.9
+```
+
 ## Installation
 
 ```bash

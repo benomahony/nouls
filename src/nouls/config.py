@@ -19,6 +19,8 @@ from tree_sitter_language_pack import (
 from nouls.store import default_path
 
 CONFIG_NAMES = ("nouls.yaml", "nouls.yml", ".nouls.yaml", ".nouls.yml")
+DEFAULTS = "defaults.yaml"
+CATALOGUE = "catalogue.yaml"  # One rule per entry of the engineering error catalogue.
 
 Severity = Literal["error", "warning", "info", "hint"]
 Scope = Literal["function", "project", "setting"]
@@ -469,8 +471,27 @@ def find_config(start: Path) -> Path | None:
     return None
 
 
+def load_builtin(name: str) -> Tree:
+    """Load one of the config files that ship with nouls.
+
+    Args:
+        name: The file's name inside the nouls package, such as ``defaults.yaml``.
+
+    Returns:
+        The file's settings.
+
+    """
+    assert name in {DEFAULTS, CATALOGUE}, f"{name} is not a config file that ships with nouls"
+    data = load_yaml(files("nouls").joinpath(name).read_text(encoding="utf-8"), name)
+    assert "rules" in data, (
+        f"nouls's built in {name} has no rules section, so the package is broken; "
+        f"restore src/nouls/{name} or reinstall nouls"
+    )
+    return data
+
+
 def load_config(start: Path, explicit: Path | None = None) -> Config:
-    """Load the defaults merged with the project's configuration.
+    """Load the defaults and catalogue rules merged with the project's configuration.
 
     Args:
         start: The directory to search up from for a config file.
@@ -480,19 +501,14 @@ def load_config(start: Path, explicit: Path | None = None) -> Config:
         The validated configuration.
 
     """
-    data = load_yaml(
-        files("nouls").joinpath("defaults.yaml").read_text(encoding="utf-8"), "defaults.yaml"
-    )
-    assert "rules" in data, (
-        "nouls's built in defaults.yaml has no rules section, so the package is broken; "
-        "restore src/nouls/defaults.yaml or reinstall nouls"
-    )
+    data = merge(load_builtin(DEFAULTS), load_builtin(CATALOGUE))
+    assert "rules" in data, "Merging the built in files must keep their rules section"
     path = explicit or find_config(start.resolve())
     if path is not None:
         data = merge(data, load_yaml(path.read_text(encoding="utf-8"), str(path)))
     config = Config.model_validate(data)
     assert config.languages, (
-        f"{path or 'defaults.yaml'} leaves no languages configured, so nouls has nothing to lint; "
+        f"{path or DEFAULTS} leaves no languages configured, so nouls has nothing to lint; "
         "add at least one entry under languages"
     )
     return config

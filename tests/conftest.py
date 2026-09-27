@@ -31,7 +31,9 @@ def total(items: list[int]) -> int:
     return sum(items)
 """
 PYTHON_FUNCTIONS = 2
-PROJECT_CALLS = 2  # The project question, and one for the strict pyproject's only setting.
+# The build files' questions, the operations files' questions, and the strict pyproject's only
+# setting.
+PROJECT_CALLS = 3
 
 APP = Path("src/app.py")
 
