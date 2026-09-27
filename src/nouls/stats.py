@@ -10,12 +10,13 @@ from typing import Annotated
 from cyclopts import App, Parameter, validators
 from rich.console import Console
 from rich.table import Table
-from typesafe_sdk import AsyncTypeSafeClient
+from typesafe_sdk import AsyncTypeSafeClient, TypeSafeError
 
 from nouls.analyser import Analyser, question_hash
 from nouls.config import Config, load_config
 from nouls.output import fail
 from nouls.store import Store
+from nouls.typesafe import explain
 
 stats = App(name="stats", help="Analyse stored answers, findings and labels.")
 console = Console()
@@ -364,7 +365,10 @@ def thresholds(rule: str | None = None, *, ask: bool = False, config: ConfigOpti
             if p is None
         ]
         if missing:
-            asyncio.run(ask_missing(loaded, store, missing))
+            try:
+                asyncio.run(ask_missing(loaded, store, missing))
+            except TypeSafeError as error:
+                return fail(explain(error))
     shown = 0
     for name in names:
         rows = labelled(loaded, store, name)

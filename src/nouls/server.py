@@ -10,11 +10,12 @@ from typing import cast
 
 from lsprotocol import types
 from pygls.lsp.server import LanguageServer
-from typesafe_sdk import AsyncTypeSafeClient
+from typesafe_sdk import AsyncTypeSafeClient, TypeSafeError
 
 from nouls.analyser import Analyser, Finding
 from nouls.config import find_root, load_config, project_files
 from nouls.store import DIGEST_LENGTH, Store
+from nouls.typesafe import explain
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class NoulsServer(LanguageServer):
         super().__init__("nouls", version("nouls"))  # pyright: ignore[reportUnknownMemberType]
         self._analyser: Analyser | None = None
         self.pending: dict[str, asyncio.Task[None]] = {}
+        self.warned: set[str] = set()
         assert self.name == "nouls", "Server must identify as nouls"
         assert self.version, "Server must report a version"
 
@@ -90,6 +92,23 @@ def to_diagnostic(finding: Finding, *, show_probability: bool) -> types.Diagnost
     )
 
 
+def warn(ls: NoulsServer, message: str) -> None:
+    """Show a warning in the editor once, however many lints hit the same problem.
+
+    Args:
+        ls: The language server.
+        message: A plain language message that says how to fix the problem.
+
+    """
+    assert message.startswith("nouls: "), "Warnings start with nouls: so users know their source"
+    if message in ls.warned:
+        return
+    ls.warned.add(message)
+    logger.warning(message)
+    ls.window_show_message(types.ShowMessageParams(type=types.MessageType.Warning, message=message))
+    assert message in ls.warned, "A shown warning must be remembered so it is not repeated"
+
+
 async def lint(ls: NoulsServer, uri: str) -> None:
     """Check a document after the debounce delay and publish its findings.
 
@@ -99,7 +118,11 @@ async def lint(ls: NoulsServer, uri: str) -> None:
 
     """
     assert uri, "Document URI must not be empty"
-    analyser = ls.analyser
+    try:
+        analyser = ls.analyser
+    except TypeSafeError as error:
+        warn(ls, explain(error))
+        return
     await asyncio.sleep(analyser.config.debounce_ms / 1000)
     document = ls.workspace.get_text_document(uri)
     path = Path(document.path)
@@ -116,11 +139,13 @@ async def lint(ls: NoulsServer, uri: str) -> None:
             project = await analyser.analyse_project(root)
             project += await analyser.analyse_settings(root)
             findings += [finding for anchor, finding in project if anchor == path]
+    except TypeSafeError as error:
+        warn(ls, explain(error))
+        return
     except Exception:
         logger.exception(
             "nouls could not analyse %s, so its diagnostics were not updated; "
-            "the traceback below gives the cause. "
-            "Check TYPESAFE_API_KEY is set and TypeSafe is reachable, then edit or save to retry.",
+            "the traceback below gives the cause. Fix it, then edit or save the file to retry.",
             uri,
         )
         return

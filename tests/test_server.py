@@ -27,8 +27,8 @@ from tests.conftest import PYTHON, FakeClient, FakeServer, as_server
 pytestmark = pytest.mark.unit
 
 
-class TypeSafeUnavailableError(RuntimeError):
-    """TypeSafe could not be reached."""
+class ParserCrashedError(RuntimeError):
+    """A stand in for an unexpected failure inside analysis."""
 
 
 def identifier(uri: str) -> types.TextDocumentIdentifier:
@@ -125,13 +125,13 @@ async def test_analysis_failures_are_logged_not_raised(
 
     async def explode(*_: object) -> None:
         await asyncio.sleep(0)
-        raise TypeSafeUnavailableError
+        raise ParserCrashedError
 
     monkeypatch.setattr(ls.analyser, "analyse", explode)
     await lint(as_server(ls), "file:///app.py")
     assert ls.published == []
     assert "nouls could not analyse" in caplog.text
-    assert "TYPESAFE_API_KEY" in caplog.text
+    assert "edit or save the file to retry" in caplog.text
 
 
 async def test_code_actions_offer_both_labels_and_relabel(ls: FakeServer) -> None:

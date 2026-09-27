@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.prompt import Prompt
 from rich.syntax import Syntax
 from rich.table import Table
-from typesafe_sdk import AsyncTypeSafeClient
+from typesafe_sdk import AsyncTypeSafeClient, TypeSafeError
 
 from nouls.analyser import PROJECT, SETTING, Analyser, Finding, project_source, unit_hash
 from nouls.config import Config, Rule, Severity, find_root, load_config
@@ -22,6 +22,7 @@ from nouls.server import server
 from nouls.settings import settings_in
 from nouls.stats import SAMPLE, SampleRow, display, stats
 from nouls.store import Store
+from nouls.typesafe import explain
 from nouls.units import extract_units
 
 SEVERITY_STYLE: dict[Severity, str] = {
@@ -197,7 +198,10 @@ def check(*paths: Path, config: ConfigOption = None) -> int:
     assert targets, "At least one target must be checked"
     root = targets[0] if targets[0].is_dir() else targets[0].parent
     assert root.is_dir(), "Config search root must be a directory"
-    return asyncio.run(run_check(targets, load_config(root, config), find_root(root.resolve())))
+    try:
+        return asyncio.run(run_check(targets, load_config(root, config), find_root(root.resolve())))
+    except TypeSafeError as error:
+        return fail(explain(error))
 
 
 def rule_fields(loaded: Config, rule: Rule) -> tuple[Severity, float, str]:

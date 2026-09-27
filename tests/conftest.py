@@ -75,6 +75,7 @@ class FakeClient:
     """TypeSafe stand in that flags ms/s mixing and projects without strict settings."""
 
     calls: list[Call] = field(default_factory=list)
+    error: Exception | None = None
 
     async def __aenter__(self) -> Self:
         """Open the fake client.
@@ -103,6 +104,8 @@ class FakeClient:
 
         """
         self.calls.append(Call(state, set(questions), model))
+        if self.error is not None:
+            raise self.error
         files = state.get("files")
         function = state.get("function")
         line = state.get("line")
@@ -144,6 +147,8 @@ class FakeServer:
     client: FakeClient
     pending: dict[str, asyncio.Task[None]] = field(default_factory=dict)
     published: list[types.PublishDiagnosticsParams] = field(default_factory=list)
+    warned: set[str] = field(default_factory=set)
+    shown: list[types.ShowMessageParams] = field(default_factory=list)
 
     @property
     def workspace(self) -> SimpleNamespace:
@@ -167,6 +172,15 @@ class FakeServer:
 
         """
         self.published.append(params)
+
+    def window_show_message(self, params: types.ShowMessageParams) -> None:
+        """Record messages shown in the editor.
+
+        Args:
+            params: The message.
+
+        """
+        self.shown.append(params)
 
 
 def as_server(fake: FakeServer) -> NoulsServer:
