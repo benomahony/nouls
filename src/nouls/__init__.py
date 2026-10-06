@@ -2,4 +2,4 @@
 # SPDX-License-Identifier: MIT
 """nouls: a semantic linter that asks yes/no questions about every function."""
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
